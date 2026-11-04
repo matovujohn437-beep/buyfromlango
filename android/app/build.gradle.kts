@@ -29,8 +29,6 @@ android {
 
     defaultConfig {
         applicationId = "ug.co.buyfromlango.app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23
         targetSdk = 36
         versionCode = flutter.versionCode
