@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "ug.co.buyfromlango.app"
     compileSdk = 36
-    ndkVersion = ndkVersion = "27.0.12077973"
+    ndkVersion = "27.0.12077973" // Fixed the double assignment here
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -24,7 +24,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11" // Fixed the deprecated warning here
     }
 
     defaultConfig {
