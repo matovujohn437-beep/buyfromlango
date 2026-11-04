@@ -15,22 +15,26 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-}
 
-// 🛠️ ADDED FIX FOR DISCONTINUED PACKAGES (like telephony)
+// 👇 THIS IS THE NEW FIX 👇
 subprojects {
-    afterEvaluate {
-        if (project.hasProperty("android")) {
-            val androidExtension = project.extensions.findByName("android")
-            if (androidExtension is com.android.build.gradle.BaseExtension) {
-                if (androidExtension.namespace == null) {
-                    androidExtension.namespace = "com.example.${project.name}"
-                }
-            }
+    // We use the 'plugins.withId' block so it only runs if the Android plugin is actually applied
+    plugins.withId("com.android.library") {
+        val androidExtension = extensions.getByName("android") as com.android.build.gradle.LibraryExtension
+        if (androidExtension.namespace == null) {
+            androidExtension.namespace = "com.example.${project.name}"
         }
     }
+    plugins.withId("com.android.application") {
+        val androidExtension = extensions.getByName("android") as com.android.build.gradle.AppExtension
+        if (androidExtension.namespace == null) {
+            androidExtension.namespace = "com.example.${project.name}"
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
