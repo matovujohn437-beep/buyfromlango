@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../constants/app_assets.dart';
@@ -143,22 +144,26 @@ class _ListingContent extends ConsumerWidget {
                               item.mediaType == 'image' &&
                               item.mediaUrl == primaryImageUrl,
                         );
-                        final imageIndex = primaryIndex >= 0
-                            ? primaryIndex
-                            : mediaItems.indexWhere(
-                                (item) => item.mediaType == 'image',
-                              );
-                        if (mediaItems.isEmpty || imageIndex < 0) {
+                        if (mediaItems.isEmpty) {
                           return _primaryImage(
                             primaryImageUrl,
                             listing.categoryId,
                             heroTag,
                           );
                         }
+                        final firstImageIndex = mediaItems.indexWhere(
+                          (item) => item.mediaType == 'image',
+                        );
+                        final initialIndex = primaryIndex >= 0
+                            ? primaryIndex
+                            : firstImageIndex >= 0
+                                ? firstImageIndex
+                                : 0;
                         final orderedMedia = [
-                          mediaItems[imageIndex],
+                          mediaItems[initialIndex],
                           ...mediaItems.where(
-                            (item) => !identical(item, mediaItems[imageIndex]),
+                            (item) =>
+                                !identical(item, mediaItems[initialIndex]),
                           ),
                         ];
                         return PageView.builder(
@@ -843,7 +848,9 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
     if (widget.media.mediaType == 'video') {
       _videoController = VideoPlayerController.networkUrl(
         Uri.parse(widget.media.mediaUrl),
-      )..initialize().then((_) {
+      )
+        ..addListener(_updateVideoState)
+        ..initialize().then((_) {
           if (mounted) setState(() {});
         }).catchError((Object error) {
           if (mounted) setState(() => _error = error);
@@ -855,17 +862,98 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
 
   @override
   void dispose() {
-    _videoController?.dispose();
+    _videoController
+      ?..removeListener(_updateVideoState)
+      ..dispose();
     _audioPlayer?.dispose();
     super.dispose();
   }
 
   @override
+  void didUpdateWidget(covariant _ListingMediaView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.media.mediaUrl == widget.media.mediaUrl &&
+        oldWidget.media.mediaType == widget.media.mediaType) {
+      return;
+    }
+    _videoController
+      ?..removeListener(_updateVideoState)
+      ..dispose();
+    _audioPlayer?.dispose();
+    _videoController = null;
+    _audioPlayer = null;
+    _error = null;
+    if (widget.media.mediaType == 'video') {
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.media.mediaUrl),
+      )
+        ..addListener(_updateVideoState)
+        ..initialize().then((_) {
+          if (mounted) setState(() {});
+        }).catchError((Object error) {
+          if (mounted) setState(() => _error = error);
+        });
+    } else if (widget.media.mediaType == 'audio') {
+      _audioPlayer = AudioPlayer();
+    }
+  }
+
+  void _updateVideoState() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return AssetImageFallback(
-        asset: widget.fallbackAsset,
-        fit: BoxFit.cover,
+      return _mediaActions(
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error),
+              const SizedBox(height: AppSpacing.xs),
+              const Text('Could not load media'),
+              TextButton(
+                onPressed: _retry,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (widget.media.mediaType == 'document') {
+      final fileName =
+          Uri.tryParse(widget.media.mediaUrl)?.pathSegments.lastOrNull ??
+              'Listing document';
+      return _mediaActions(
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.picture_as_pdf_outlined,
+                size: 44,
+                color: AppColors.error,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(
+                  Uri.decodeComponent(fileName),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _openMedia,
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Open document'),
+              ),
+            ],
+          ),
+        ),
       );
     }
     if (widget.media.mediaType == 'video') {
@@ -873,28 +961,39 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
       if (!controller.value.isInitialized) {
         return const Center(child: CircularProgressIndicator());
       }
-      return ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VideoPlayer(controller),
-                IconButton.filled(
-                  tooltip:
-                      controller.value.isPlaying ? 'Pause video' : 'Play video',
-                  onPressed: () => setState(
-                    () => controller.value.isPlaying
-                        ? controller.pause()
-                        : controller.play(),
+      return _mediaActions(
+        ColoredBox(
+          color: Colors.black,
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: controller.value.aspectRatio,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  VideoPlayer(controller),
+                  IconButton.filled(
+                    tooltip: controller.value.isPlaying
+                        ? 'Pause video'
+                        : 'Play video',
+                    onPressed: () async {
+                      try {
+                        if (controller.value.isPlaying) {
+                          await controller.pause();
+                        } else {
+                          await controller.play();
+                        }
+                      } catch (error) {
+                        if (mounted) setState(() => _error = error);
+                      }
+                    },
+                    icon: Icon(
+                      controller.value.isPlaying
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                    ),
                   ),
-                  icon: Icon(
-                    controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -902,33 +1001,37 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
     }
     if (widget.media.mediaType == 'audio') {
       final player = _audioPlayer!;
-      return ColoredBox(
-        color: AppColors.primary.withValues(alpha: 0.08),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.graphic_eq, size: 48, color: AppColors.primary),
-              const SizedBox(height: AppSpacing.sm),
-              const Text('Seller voice note'),
-              IconButton.filled(
-                tooltip: 'Play audio note',
-                onPressed: () async {
-                  try {
-                    if (player.playing) {
-                      await player.pause();
-                    } else {
-                      await player.setUrl(widget.media.mediaUrl);
-                      await player.play();
+      return _mediaActions(
+        ColoredBox(
+          color: AppColors.primary.withValues(alpha: 0.08),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.graphic_eq,
+                    size: 48, color: AppColors.primary),
+                const SizedBox(height: AppSpacing.sm),
+                const Text('Seller voice note'),
+                IconButton.filled(
+                  tooltip:
+                      player.playing ? 'Pause audio note' : 'Play audio note',
+                  onPressed: () async {
+                    try {
+                      if (player.playing) {
+                        await player.pause();
+                      } else {
+                        await player.setUrl(widget.media.mediaUrl);
+                        await player.play();
+                      }
+                    } catch (error) {
+                      if (mounted) setState(() => _error = error);
                     }
-                  } catch (error) {
-                    if (mounted) setState(() => _error = error);
-                  }
-                  if (mounted) setState(() {});
-                },
-                icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
-              ),
-            ],
+                    if (mounted) setState(() {});
+                  },
+                  icon: Icon(player.playing ? Icons.pause : Icons.play_arrow),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -950,9 +1053,124 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
               fit: BoxFit.cover,
             ),
           );
-    return widget.heroTag == null
-        ? image
-        : Hero(tag: widget.heroTag!, child: image);
+    final preview = GestureDetector(
+      onTap: () => _showImagePreview(context),
+      child: image,
+    );
+    return _mediaActions(
+      widget.heroTag == null
+          ? preview
+          : Hero(tag: widget.heroTag!, child: preview),
+    );
+  }
+
+  Widget _mediaActions(Widget child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          child,
+          if (!widget.media.mediaUrl.startsWith('assets/'))
+            Positioned(
+              top: AppSpacing.xs,
+              right: AppSpacing.xs,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'Open or download media',
+                  onPressed: _openMedia,
+                  color: Colors.white,
+                  icon: const Icon(Icons.download_outlined),
+                ),
+              ),
+            ),
+        ],
+      );
+
+  Future<void> _openMedia() async {
+    try {
+      final uri = Uri.parse(widget.media.mediaUrl);
+      if (!uri.hasScheme ||
+          (uri.scheme != 'https' && uri.scheme != 'http') ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('No app could open this media.');
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open media: $error')),
+        );
+      }
+    }
+  }
+
+  void _showImagePreview(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: widget.media.mediaUrl.startsWith('assets/')
+                    ? AssetImageFallback(
+                        asset: widget.media.mediaUrl,
+                        fit: BoxFit.contain,
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: widget.media.mediaUrl,
+                        fit: BoxFit.contain,
+                        errorWidget: (_, __, ___) => const Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+              ),
+            ),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Close image',
+                  onPressed: () => Navigator.pop(context),
+                  color: Colors.white,
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _retry() async {
+    setState(() => _error = null);
+    if (widget.media.mediaType == 'video') {
+      final previous = _videoController;
+      if (previous != null) {
+        await previous.dispose();
+      }
+      if (!mounted) return;
+      _videoController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.media.mediaUrl),
+      )
+        ..addListener(_updateVideoState)
+        ..initialize().then((_) {
+          if (mounted) setState(() {});
+        }).catchError((Object error) {
+          if (mounted) setState(() => _error = error);
+        });
+    } else if (widget.media.mediaType == 'audio') {
+      final player = _audioPlayer!;
+      try {
+        await player.setUrl(widget.media.mediaUrl);
+        await player.play();
+      } catch (error) {
+        if (mounted) setState(() => _error = error);
+      }
+    }
   }
 }
 

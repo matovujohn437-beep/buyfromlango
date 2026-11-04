@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/chat_thread.dart';
+import '../models/chat_message_reaction.dart';
 import '../models/message.dart';
 import '../supabase_config.dart';
 
@@ -126,6 +127,106 @@ class ChatService {
 
   Future<void> sendMessage(Map<String, dynamic> payload) async {
     await _client.from('messages').insert(payload);
+  }
+
+  Future<bool> isUserFeaturePhone(String phoneNumber) async {
+    final response = await _client.rpc(
+      'is_user_feature_phone',
+      params: {'p_phone_number': phoneNumber},
+    );
+    if (response is! bool) {
+      throw StateError(
+        'Could not determine whether the user has a feature phone.',
+      );
+    }
+    return response;
+  }
+
+  Future<bool> isChatParticipantFeaturePhone(int threadId) async {
+    final response = await _client.rpc(
+      'is_chat_participant_feature_phone',
+      params: {'p_thread_id': threadId},
+    );
+    if (response is! bool) {
+      throw StateError(
+        'Could not determine whether the chat participant has a feature phone.',
+      );
+    }
+    return response;
+  }
+
+  Future<void> sendTextMessage({
+    required int threadId,
+    required String content,
+    int? replyTo,
+  }) async {
+    await _client.rpc(
+      'send_chat_text_message',
+      params: {
+        'p_thread_id': threadId,
+        'p_content': content,
+        'p_reply_to': replyTo,
+      },
+    );
+  }
+
+  Future<void> softDeleteMessage(int messageId) async {
+    final deleted = await _client
+        .from('messages')
+        .update({'is_deleted': true})
+        .eq('id', messageId)
+        .select('id')
+        .maybeSingle();
+    if (deleted == null) {
+      throw StateError('The message could not be deleted.');
+    }
+  }
+
+  Stream<List<ChatMessageReaction>> watchMessageReactions(int threadId) {
+    return _client
+        .from('chat_message_reactions')
+        .stream(primaryKey: ['message_id', 'user_id', 'emoji'])
+        .eq('thread_id', threadId)
+        .map(
+          (rows) => rows
+              .map(
+                (row) => ChatMessageReaction.fromJson(
+                  Map<String, dynamic>.from(row),
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  Future<void> toggleMessageReaction({
+    required int threadId,
+    required int messageId,
+    required String userId,
+    required String emoji,
+  }) async {
+    final existing = await _client
+        .from('chat_message_reactions')
+        .select('message_id')
+        .eq('message_id', messageId)
+        .eq('user_id', userId)
+        .eq('emoji', emoji)
+        .maybeSingle();
+    final query = _client
+        .from('chat_message_reactions')
+        .delete()
+        .eq('message_id', messageId)
+        .eq('user_id', userId)
+        .eq('emoji', emoji);
+    if (existing != null) {
+      await query;
+    } else {
+      await _client.from('chat_message_reactions').insert({
+        'thread_id': threadId,
+        'message_id': messageId,
+        'user_id': userId,
+        'emoji': emoji,
+      });
+    }
   }
 
   Future<String> uploadChatMedia({

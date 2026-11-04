@@ -26,7 +26,7 @@ class SplashScreen extends ConsumerWidget {
               Positioned.fill(
                 child: Image.asset(
                   AppAssets.splashBackground,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const ColoredBox(
                     color: AppColors.primaryDark,
                   ),

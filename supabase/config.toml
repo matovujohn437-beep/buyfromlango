@@ -15,6 +15,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/phone-password-login/index.ts"
 
+[functions.poll-chat-sms]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/poll-chat-sms/index.ts"
+
 [functions.request-contact]
 enabled = true
 verify_jwt = true

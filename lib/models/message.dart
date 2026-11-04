@@ -10,6 +10,7 @@ class MessageModel {
     this.mediaType = 'text',
     this.replyTo,
     this.forwardedFrom,
+    this.isSms = false,
     this.isDeleted = false,
     this.createdAt,
   });
@@ -22,6 +23,7 @@ class MessageModel {
   final String mediaType;
   final int? replyTo;
   final int? forwardedFrom;
+  final bool isSms;
   final bool isDeleted;
   final DateTime? createdAt;
 
@@ -35,6 +37,7 @@ class MessageModel {
       mediaType: JsonReader.string(json, 'media_type', defaultValue: 'text'),
       replyTo: JsonReader.intValue(json, 'reply_to'),
       forwardedFrom: JsonReader.intValue(json, 'forwarded_from'),
+      isSms: JsonReader.boolValue(json, 'is_sms'),
       isDeleted: JsonReader.boolValue(json, 'is_deleted'),
       createdAt: JsonReader.dateTime(json, 'created_at'),
     );
@@ -50,6 +53,7 @@ class MessageModel {
       'media_type': mediaType,
       'reply_to': replyTo,
       'forwarded_from': forwardedFrom,
+      'is_sms': isSms,
       'is_deleted': isDeleted,
       'created_at': createdAt?.toIso8601String(),
     };

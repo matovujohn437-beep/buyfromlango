@@ -56,7 +56,7 @@ serve(async (req) => {
     // 4. Check if User is Registered
     const { data: userProfile } = await supabase
       .from("profiles")
-      .select("id, full_name, phone")
+      .select("id, full_name, phone, is_feature_phone")
       .eq("phone", formattedPhone)
       .maybeSingle();
 
@@ -95,6 +95,43 @@ serve(async (req) => {
         }
         reply =
           `Thank you ${fullName}. You are registered in ${subcounty}, ${district}! Reply 0 for menu.`;
+      }
+    } else if (upperText.startsWith("CHAT ")) {
+      const chatReply = text.match(/^CHAT\s+(\d+)\s+([\s\S]+)$/i);
+      if (!userProfile || userProfile.is_feature_phone !== true) {
+        reply = "This phone is not enabled for chat-by-SMS.";
+      } else if (!chatReply) {
+        reply = "Reply CHAT <conversation number> <your message>.";
+      } else {
+        const threadId = Number(chatReply[1]);
+        const content = chatReply[2].trim();
+        const { data: thread, error: threadError } = await supabase
+          .from("chat_threads")
+          .select("id, buyer_id, seller_id")
+          .eq("id", threadId)
+          .maybeSingle();
+        if (threadError) throw threadError;
+
+        if (
+          !thread ||
+          (thread.buyer_id !== userProfile.id &&
+            thread.seller_id !== userProfile.id)
+        ) {
+          reply = "Conversation not found. Reply with the number in the SMS.";
+        } else if (!content || content.length > 4000) {
+          reply = "Your reply must contain 1 to 4000 characters.";
+        } else {
+          const { error: messageError } = await supabase.from("messages")
+            .insert({
+              thread_id: threadId,
+              sender_id: userProfile.id,
+              content,
+              media_type: "text",
+              is_sms: true,
+            });
+          if (messageError) throw messageError;
+          reply = "Your reply was sent to the Buy From Lango conversation.";
+        }
       }
     } // 7. Handle Phone Reveal
     else if (upperText === "REVEAL") {

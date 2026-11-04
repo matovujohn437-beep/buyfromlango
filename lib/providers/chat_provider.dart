@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/chat_message_reaction.dart';
 import '../models/chat_thread.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
@@ -24,4 +25,14 @@ final watchedChatThreadsProvider =
 final threadMessagesProvider =
     StreamProvider.family<List<MessageModel>, int>((ref, threadId) {
   return ref.read(chatServiceProvider).watchMessages(threadId);
+});
+
+final chatParticipantFeaturePhoneProvider =
+    FutureProvider.family<bool, int>((ref, threadId) {
+  return ref.read(chatServiceProvider).isChatParticipantFeaturePhone(threadId);
+});
+
+final threadMessageReactionsProvider =
+    StreamProvider.family<List<ChatMessageReaction>, int>((ref, threadId) {
+  return ref.read(chatServiceProvider).watchMessageReactions(threadId);
 });

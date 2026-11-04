@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('bottom navigation destinations remain visible on their surface',
+  testWidgets('bottom navigation shows icons only with accessible labels',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -29,7 +29,9 @@ void main() {
     );
     expect(navigationBackground.color, AppColors.primaryDark);
     for (final label in ['Back', 'Home', 'Profile', 'Buyer Demands']) {
-      expect(find.text(label), findsOneWidget);
+      expect(find.text(label), findsNothing);
+      expect(find.bySemanticsLabel(label), findsOneWidget);
     }
+    expect(find.byType(Icon), findsNWidgets(4));
   });
 }

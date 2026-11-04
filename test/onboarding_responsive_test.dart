@@ -33,10 +33,14 @@ void main() {
       for (var page = 0; page < 3; page++) {
         final image = tester.widget<Image>(find.byType(Image).first);
         final imageSize = tester.getSize(find.byType(Image).first);
+        final imageRect = tester.getRect(find.byType(Image).first);
 
-        expect(image.fit, BoxFit.cover);
-        expect(imageSize, size);
-        expect(tester.getTopLeft(find.byType(Image).first), Offset.zero);
+        expect(image.fit, BoxFit.contain);
+        expect(imageSize.height, lessThan(size.height));
+        expect(imageSize.width, lessThanOrEqualTo(size.width));
+        expect(imageRect.left, greaterThanOrEqualTo(0));
+        expect(imageRect.right, lessThanOrEqualTo(size.width));
+        expect(imageRect.bottom, lessThan(size.height));
         expect(
           tester.getRect(find.text('Log in')).bottom,
           lessThanOrEqualTo(size.height),
@@ -61,6 +65,10 @@ void main() {
           expect(rect.top, greaterThanOrEqualTo(0));
           expect(rect.bottom, lessThanOrEqualTo(size.height));
         }
+        expect(
+          imageRect.bottom,
+          lessThanOrEqualTo(tester.getTopLeft(find.text(title)).dy),
+        );
         expect(tester.takeException(), isNull);
 
         if (page < 2) {

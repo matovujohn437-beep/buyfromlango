@@ -16,6 +16,7 @@ class ProfileModel {
     this.isAnonymous = false,
     this.isVerified = false,
     this.isAdmin = false,
+    this.isFeaturePhone = false,
     this.avatarUrl,
     this.bio,
     this.districtName,
@@ -36,13 +37,15 @@ class ProfileModel {
   final bool isAnonymous;
   final bool isVerified;
   final bool isAdmin;
+  final bool isFeaturePhone;
   final String? avatarUrl;
   final String? bio;
   final String? districtName;
   final DateTime? createdAt;
 
   bool get isFeaturePhoneUser =>
-      email != null ? email!.trim().isEmpty : !(hasEmail ?? false);
+      isFeaturePhone ||
+      (email != null ? email!.trim().isEmpty : !(hasEmail ?? false));
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
@@ -70,6 +73,7 @@ class ProfileModel {
       isAnonymous: JsonReader.boolValue(json, 'is_anonymous'),
       isVerified: JsonReader.boolValue(json, 'is_verified'),
       isAdmin: JsonReader.boolValue(json, 'is_admin'),
+      isFeaturePhone: JsonReader.boolValue(json, 'is_feature_phone'),
       avatarUrl: json['avatar_url']?.toString(),
       bio: json['bio']?.toString(),
       districtName: (json['district'] as Map?)?['name']?.toString() ??
@@ -93,6 +97,7 @@ class ProfileModel {
       'is_anonymous': isAnonymous,
       'is_verified': isVerified,
       'is_admin': isAdmin,
+      'is_feature_phone': isFeaturePhone,
       'avatar_url': avatarUrl,
       'bio': bio,
       'district_name': districtName,

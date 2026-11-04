@@ -333,6 +333,7 @@ class ListingService {
       isAnonymous: profile.isAnonymous,
       isVerified: profile.isVerified,
       isAdmin: profile.isAdmin,
+      isFeaturePhone: profile.isFeaturePhone,
       avatarUrl: profile.avatarUrl,
       bio: profile.bio,
       districtName: district['name']?.toString(),

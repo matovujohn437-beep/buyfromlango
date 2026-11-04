@@ -55,7 +55,7 @@ class AppLogoBadge extends ConsumerWidget {
               ? ClipOval(
                   child: Image.asset(
                     AppAssets.appLogo,
-                    fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const ColoredBox(
                       color: Colors.white,
                       child: Icon(

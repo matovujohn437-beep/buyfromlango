@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -11,6 +12,7 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../constants/app_assets.dart';
+import '../../models/chat_message_reaction.dart';
 import '../../models/chat_thread.dart';
 import '../../models/message.dart';
 import '../../models/seller_tag.dart';
@@ -48,6 +50,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
+  final _messageFocusNode = FocusNode();
   final _recorder = AudioRecorder();
   BytesBuilder? _recordingBuffer;
   StreamSubscription<Uint8List>? _recordingSubscription;
@@ -55,10 +58,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   MessageModel? _replyTo;
   bool _isSending = false;
   bool _isRecording = false;
+  bool _showEmojiPicker = false;
 
   @override
   void dispose() {
     _messageController.dispose();
+    _messageFocusNode.dispose();
     unawaited(_recordingSubscription?.cancel());
     unawaited(_recorder.dispose());
     super.dispose();
@@ -68,12 +73,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final messages = ref.watch(threadMessagesProvider(widget.threadId));
+    final reactions =
+        ref.watch(threadMessageReactionsProvider(widget.threadId));
     final thread = ref.watch(chatThreadProvider(widget.threadId)).valueOrNull;
     final otherUserId = thread == null || user == null
         ? null
         : thread.buyerId == user.id
             ? thread.sellerId
             : thread.buyerId;
+    final otherUserIsFeaturePhone =
+        ref.watch(chatParticipantFeaturePhoneProvider(widget.threadId));
 
     return Scaffold(
       appBar: CustomAppBar(
@@ -143,6 +152,57 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                     ),
                   ),
+            otherUserIsFeaturePhone.when(
+              data: (isFeaturePhone) => isFeaturePhone
+                  ? Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                        AppSpacing.md,
+                        0,
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(AppRadius.card),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.sms_outlined, color: AppColors.primary),
+                          SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              'This user is on a feature phone. Messages will be sent via SMS.',
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+              loading: () => const SizedBox.shrink(),
+              error: (error, _) => Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Text(
+                  'Could not check the recipient phone type: $error',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.error),
+                ),
+              ),
+            ),
+            if (reactions.hasError)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Text(
+                  'Could not load message reactions: ${reactions.error}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.error),
+                ),
+              ),
             Expanded(
               child: messages.when(
                 loading: () => const Center(
@@ -187,8 +247,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             message: message,
                             replyToMessage: replyTo,
                             isMine: message.senderId == user?.id,
+                            currentUserId: user?.id,
+                            reactions: reactions.valueOrNull
+                                    ?.where((reaction) =>
+                                        reaction.messageId == message.id)
+                                    .toList() ??
+                                const [],
                             onReply: () => setState(() => _replyTo = message),
                             onForward: () => _forwardMessage(message, user?.id),
+                            onDelete: () => _deleteMessage(message),
+                            onReact: (emoji) =>
+                                _toggleReaction(message, user?.id, emoji),
                           );
                         },
                       ),
@@ -199,6 +268,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (_showEmojiPicker)
+                    SizedBox(
+                      height: 260,
+                      child: EmojiPicker(
+                        textEditingController: _messageController,
+                        config: const Config(
+                          height: 260,
+                          emojiViewConfig: EmojiViewConfig(columns: 8),
+                        ),
+                      ),
+                    ),
                   if (_replyTo case final reply?)
                     _ReplyPreview(
                       message: reply,
@@ -221,14 +301,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       children: [
                         IconButton(
                           tooltip: 'Attach image or video',
-                          onPressed: _isSending || _isRecording
+                          onPressed: _isSending ||
+                                  _isRecording ||
+                                  otherUserIsFeaturePhone.valueOrNull == true
                               ? null
                               : _showAttachmentOptions,
                           icon: const Icon(Icons.attach_file),
                         ),
+                        IconButton(
+                          tooltip: _showEmojiPicker
+                              ? 'Show keyboard'
+                              : 'Choose emoji',
+                          onPressed: () {
+                            setState(() {
+                              _showEmojiPicker = !_showEmojiPicker;
+                            });
+                            if (_showEmojiPicker) {
+                              _messageFocusNode.unfocus();
+                            } else {
+                              _messageFocusNode.requestFocus();
+                            }
+                          },
+                          icon: Icon(
+                            _showEmojiPicker
+                                ? Icons.keyboard_alt_outlined
+                                : Icons.emoji_emotions_outlined,
+                          ),
+                        ),
                         Expanded(
                           child: TextField(
                             controller: _messageController,
+                            focusNode: _messageFocusNode,
                             textCapitalization: TextCapitalization.sentences,
                             maxLength: 4000,
                             minLines: 1,
@@ -262,13 +365,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                               ),
                             ),
                             onSubmitted: (_) => _sendMessage(user?.id),
+                            onTap: () {
+                              if (_showEmojiPicker) {
+                                setState(() => _showEmojiPicker = false);
+                              }
+                            },
                           ),
                         ),
                         IconButton(
                           tooltip: _isRecording
                               ? 'Stop and send voice note'
                               : 'Record voice note',
-                          onPressed: _isSending || user == null
+                          onPressed: _isSending ||
+                                  user == null ||
+                                  otherUserIsFeaturePhone.valueOrNull == true
                               ? null
                               : _isRecording
                                   ? _stopAndSendVoiceNote
@@ -358,6 +468,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<void> _deleteMessage(MessageModel message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This message will be marked as deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(chatServiceProvider).softDeleteMessage(message.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete message: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleReaction(
+    MessageModel message,
+    String? userId,
+    String emoji,
+  ) async {
+    if (userId == null) return;
+    try {
+      await ref.read(chatServiceProvider).toggleMessageReaction(
+            threadId: widget.threadId,
+            messageId: message.id,
+            userId: userId,
+            emoji: emoji,
+          );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add reaction: $error')),
+        );
+      }
+    }
+  }
+
   Future<bool> _sendPayload({
     required String senderId,
     required int threadId,
@@ -370,15 +532,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!mounted) return false;
     setState(() => _isSending = true);
     try {
-      await ref.read(chatServiceProvider).sendMessage({
-        'thread_id': threadId,
-        'sender_id': senderId,
-        'content': content,
-        'media_url': mediaUrl,
-        'media_type': mediaType,
-        'reply_to': replyTo,
-        'forwarded_from': forwardedFrom,
-      });
+      final service = ref.read(chatServiceProvider);
+      if (mediaType == 'text' && forwardedFrom == null) {
+        await service.sendTextMessage(
+          threadId: threadId,
+          content: content?.trim() ?? '',
+          replyTo: replyTo,
+        );
+      } else {
+        await service.sendMessage({
+          'thread_id': threadId,
+          'sender_id': senderId,
+          'content': content,
+          'media_url': mediaUrl,
+          'media_type': mediaType,
+          'reply_to': replyTo,
+          'forwarded_from': forwardedFrom,
+        });
+      }
       return true;
     } catch (error) {
       if (mounted) {
@@ -455,6 +626,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (file == null || userId == null || !mounted) return;
       setState(() => _isSending = true);
       final bytes = await file.readAsBytes();
+      if (await ref
+          .read(chatServiceProvider)
+          .isChatParticipantFeaturePhone(widget.threadId)) {
+        throw StateError('Media attachments cannot be sent by SMS.');
+      }
       final extension = isVideo
           ? _extensionOf(file.name, fallback: 'mp4')
           : _extensionOf(file.name, fallback: 'jpg');
@@ -553,6 +729,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (bytes.isEmpty) {
         throw StateError('The voice note was empty.');
       }
+      if (await ref
+          .read(chatServiceProvider)
+          .isChatParticipantFeaturePhone(widget.threadId)) {
+        throw StateError('Voice notes cannot be sent by SMS.');
+      }
       const isWeb = kIsWeb;
       final path = await ref.read(chatServiceProvider).uploadChatMedia(
             bytes: bytes,
@@ -618,6 +799,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       );
       if (target == null || !mounted) return;
+      if (message.mediaUrl != null &&
+          await ref
+              .read(chatServiceProvider)
+              .isChatParticipantFeaturePhone(target.id)) {
+        throw StateError('Media attachments cannot be forwarded by SMS.');
+      }
 
       var mediaUrl = message.mediaUrl;
       if (mediaUrl != null &&
@@ -696,15 +883,25 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.replyToMessage,
     required this.isMine,
+    required this.currentUserId,
+    required this.reactions,
     required this.onReply,
     required this.onForward,
+    required this.onDelete,
+    required this.onReact,
   });
 
   final MessageModel message;
   final MessageModel? replyToMessage;
   final bool isMine;
+  final String? currentUserId;
+  final List<ChatMessageReaction> reactions;
   final VoidCallback onReply;
   final VoidCallback onForward;
+  final VoidCallback onDelete;
+  final ValueChanged<String> onReact;
+
+  static const _reactionOptions = ['👍', '❤️', '😂', '😮', '😢'];
 
   @override
   Widget build(BuildContext context) {
@@ -723,31 +920,68 @@ class _MessageBubble extends StatelessWidget {
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: () => showModalBottomSheet<void>(
-          context: context,
-          builder: (sheetContext) => SafeArea(
-            child: Wrap(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.reply),
-                  title: const Text('Reply'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    onReply();
-                  },
+        onLongPress: message.isDeleted
+            ? null
+            : () => showModalBottomSheet<void>(
+                  context: context,
+                  builder: (sheetContext) => SafeArea(
+                    child: Wrap(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              for (final emoji in _reactionOptions)
+                                IconButton(
+                                  tooltip: 'React $emoji',
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    onReact(emoji);
+                                  },
+                                  icon: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 24),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.reply),
+                          title: const Text('Reply'),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            onReply();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.forward),
+                          title: const Text('Forward'),
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            onForward();
+                          },
+                        ),
+                        if (isMine)
+                          ListTile(
+                            leading: const Icon(
+                              Icons.delete_outline,
+                              color: AppColors.error,
+                            ),
+                            title: const Text('Delete'),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              onDelete();
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.forward),
-                  title: const Text('Forward'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    onForward();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
         child: Container(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.sizeOf(context).width * 0.78,
@@ -775,6 +1009,11 @@ class _MessageBubble extends StatelessWidget {
                   text: 'Forwarded',
                   color: isMine ? Colors.white70 : AppColors.textSecondary,
                 ),
+              if (!message.isDeleted && message.isSms)
+                _BubbleLabel(
+                  text: 'Sent via SMS',
+                  color: isMine ? Colors.white70 : AppColors.textSecondary,
+                ),
               if (replyToMessage != null)
                 _BubbleReplyQuote(message: replyToMessage!),
               if (!message.isDeleted && message.mediaUrl != null)
@@ -793,6 +1032,23 @@ class _MessageBubble extends StatelessWidget {
                         ),
                   ),
                 ),
+              if (!message.isDeleted && reactions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      for (final emoji in _reactionOptions)
+                        ..._reactionChip(
+                          emoji,
+                          reactions,
+                          currentUserId,
+                          onReact,
+                        ),
+                    ],
+                  ),
+                ),
               if (time.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
@@ -808,6 +1064,40 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Widget> _reactionChip(
+    String emoji,
+    List<ChatMessageReaction> reactions,
+    String? currentUserId,
+    ValueChanged<String> onReact,
+  ) {
+    final matching = reactions.where((reaction) => reaction.emoji == emoji);
+    if (matching.isEmpty) return const [];
+    final isSelected =
+        matching.any((reaction) => reaction.userId == currentUserId);
+    return [
+      InkWell(
+        onTap: () => onReact(emoji),
+        borderRadius: BorderRadius.circular(AppRadius.chip),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.18)
+                : Colors.black.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : Colors.transparent,
+            ),
+          ),
+          child: Text('$emoji ${matching.length}'),
+        ),
+      ),
+    ];
   }
 }
 
@@ -871,13 +1161,15 @@ class _BubbleReplyQuote extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        message.content ??
-            switch (message.mediaType) {
-              'image' => 'Photo',
-              'video' => 'Video',
-              'audio' => 'Voice note',
-              _ => 'Message',
-            },
+        message.isDeleted
+            ? 'This message was deleted'
+            : message.content ??
+                switch (message.mediaType) {
+                  'image' => 'Photo',
+                  'video' => 'Video',
+                  'audio' => 'Voice note',
+                  _ => 'Message',
+                },
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall,
@@ -927,21 +1219,31 @@ class _MessageMedia extends StatefulWidget {
 }
 
 class _MessageMediaState extends State<_MessageMedia> {
+  final _service = ChatService();
   late Future<String> _url;
 
   @override
   void initState() {
     super.initState();
-    _url = ChatService().createSignedChatMediaUrl(widget.path);
+    _url = _service.createSignedChatMediaUrl(widget.path);
   }
 
   @override
   void didUpdateWidget(covariant _MessageMedia oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.path != widget.path) {
-      _url = ChatService().createSignedChatMediaUrl(widget.path);
+      _url = _service.createSignedChatMediaUrl(widget.path);
     }
   }
+
+  void _refreshUrl() {
+    setState(() {
+      _url = _service.createSignedChatMediaUrl(widget.path);
+    });
+  }
+
+  Future<String> _getFreshUrl() =>
+      _service.createSignedChatMediaUrl(widget.path);
 
   @override
   Widget build(BuildContext context) {
@@ -949,9 +1251,10 @@ class _MessageMediaState extends State<_MessageMedia> {
       future: _url,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const _MediaPlaceholder(
+          return _MediaPlaceholder(
             icon: Icons.broken_image_outlined,
             label: 'Could not load attachment',
+            onRetry: _refreshUrl,
           );
         }
         if (!snapshot.hasData) {
@@ -971,15 +1274,23 @@ class _MessageMediaState extends State<_MessageMedia> {
                   width: 240,
                   height: 200,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const _MediaPlaceholder(
+                  errorBuilder: (_, __, ___) => _MediaPlaceholder(
                     icon: Icons.broken_image_outlined,
                     label: 'Image unavailable',
+                    onRetry: _refreshUrl,
                   ),
                 ),
               ),
             ),
-          'video' => _VideoNote(url: snapshot.data!),
-          'audio' => _AudioNote(url: snapshot.data!, isMine: widget.isMine),
+          'video' => _VideoNote(
+              url: snapshot.data!,
+              refreshUrl: _getFreshUrl,
+            ),
+          'audio' => _AudioNote(
+              url: snapshot.data!,
+              isMine: widget.isMine,
+              refreshUrl: _getFreshUrl,
+            ),
           _ => const SizedBox.shrink(),
         };
       },
@@ -988,10 +1299,15 @@ class _MessageMediaState extends State<_MessageMedia> {
 }
 
 class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder({required this.icon, required this.label});
+  const _MediaPlaceholder({
+    required this.icon,
+    required this.label,
+    this.onRetry,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1002,16 +1318,23 @@ class _MediaPlaceholder extends StatelessWidget {
             Icon(icon),
             const SizedBox(width: AppSpacing.sm),
             Text(label),
+            if (onRetry != null)
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       );
 }
 
 class _AudioNote extends StatefulWidget {
-  const _AudioNote({required this.url, required this.isMine});
+  const _AudioNote({
+    required this.url,
+    required this.isMine,
+    required this.refreshUrl,
+  });
 
   final String url;
   final bool isMine;
+  final Future<String> Function() refreshUrl;
 
   @override
   State<_AudioNote> createState() => _AudioNoteState();
@@ -1019,80 +1342,177 @@ class _AudioNote extends StatefulWidget {
 
 class _AudioNoteState extends State<_AudioNote> {
   final _player = AudioPlayer();
+  StreamSubscription<PlayerState>? _stateSubscription;
   bool _isPlaying = false;
+  bool _isLoading = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _player.playerStateStream.listen((state) {
+    _stateSubscription = _player.playerStateStream.listen((state) {
       if (mounted) setState(() => _isPlaying = state.playing);
     });
-    _loadPlayer();
+    _loadPlayer(widget.url);
   }
 
-  Future<void> _loadPlayer() async {
+  @override
+  void didUpdateWidget(covariant _AudioNote oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) _loadPlayer(widget.url);
+  }
+
+  Future<void> _loadPlayer(String url) async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
     try {
-      await _player.setUrl(widget.url);
-    } catch (_) {
+      await _player.setUrl(url);
+      if (mounted) setState(() => _isLoading = false);
+    } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not load voice note.')),
-        );
+        setState(() {
+          _isLoading = false;
+          _error = error;
+        });
+      }
+    }
+  }
+
+  Future<void> _retry() async {
+    try {
+      await _loadPlayer(await widget.refreshUrl());
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = error;
+        });
       }
     }
   }
 
   @override
   void dispose() {
+    unawaited(_stateSubscription?.cancel());
     unawaited(_player.dispose());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: _isPlaying ? 'Pause voice note' : 'Play voice note',
-            onPressed: () async {
-              if (_isPlaying) {
-                await _player.pause();
-              } else {
-                await _player.play();
-              }
-            },
-            color: widget.isMine ? Colors.white : AppColors.primary,
-            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-          ),
-          Text(
-            'Voice note',
-            style: TextStyle(
-              color: widget.isMine ? Colors.white : AppColors.textPrimary,
-            ),
-          ),
-        ],
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return _MediaPlaceholder(
+        icon: Icons.audio_file_outlined,
+        label: 'Could not load voice note',
+        onRetry: _retry,
       );
+    }
+    if (_isLoading) {
+      return const SizedBox(
+        width: 220,
+        height: 56,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: _isPlaying ? 'Pause voice note' : 'Play voice note',
+          onPressed: () async {
+            if (_isPlaying) {
+              await _player.pause();
+            } else {
+              try {
+                await _player.play();
+              } catch (error) {
+                if (mounted) setState(() => _error = error);
+              }
+            }
+          },
+          color: widget.isMine ? Colors.white : AppColors.primary,
+          icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+        ),
+        Text(
+          'Voice note',
+          style: TextStyle(
+            color: widget.isMine ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _VideoNote extends StatefulWidget {
-  const _VideoNote({required this.url});
+  const _VideoNote({required this.url, required this.refreshUrl});
 
   final String url;
+  final Future<String> Function() refreshUrl;
 
   @override
   State<_VideoNote> createState() => _VideoNoteState();
 }
 
 class _VideoNoteState extends State<_VideoNote> {
-  late final VideoPlayerController _controller;
-  late final Future<void> _initialized;
+  VideoPlayerController? _controller;
+  bool _isLoading = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-    _controller.addListener(_updateVideoState);
-    _initialized = _controller.initialize();
+    _loadVideo(widget.url);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoNote oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) _loadVideo(widget.url);
+  }
+
+  Future<void> _loadVideo(String url) async {
+    final oldController = _controller;
+    if (oldController != null) {
+      oldController.removeListener(_updateVideoState);
+      await oldController.dispose();
+    }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    _controller = controller;
+    controller.addListener(_updateVideoState);
+    try {
+      await controller.initialize();
+      if (mounted) setState(() => _isLoading = false);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = error;
+        });
+      }
+    }
+  }
+
+  Future<void> _retry() async {
+    try {
+      await _loadVideo(await widget.refreshUrl());
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = error;
+        });
+      }
+    }
   }
 
   void _updateVideoState() {
@@ -1101,54 +1521,58 @@ class _VideoNoteState extends State<_VideoNote> {
 
   @override
   void dispose() {
-    _controller.removeListener(_updateVideoState);
-    unawaited(_controller.dispose());
+    final controller = _controller;
+    if (controller != null) {
+      controller.removeListener(_updateVideoState);
+      unawaited(controller.dispose());
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _initialized,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const _MediaPlaceholder(
-            icon: Icons.videocam_off_outlined,
-            label: 'Could not load video',
-          );
-        }
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            width: 220,
-            height: 100,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        return SizedBox(
-          width: 240,
-          child: AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VideoPlayer(_controller),
-                IconButton.filled(
-                  onPressed: () => setState(() {
-                    _controller.value.isPlaying
-                        ? _controller.pause()
-                        : _controller.play();
-                  }),
-                  icon: Icon(
-                    _controller.value.isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow,
-                  ),
-                ),
-              ],
+    final controller = _controller;
+    if (_error != null) {
+      return _MediaPlaceholder(
+        icon: Icons.videocam_off_outlined,
+        label: 'Could not load video',
+        onRetry: _retry,
+      );
+    }
+    if (_isLoading || controller == null) {
+      return const SizedBox(
+        width: 220,
+        height: 100,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return SizedBox(
+      width: 240,
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            VideoPlayer(controller),
+            IconButton.filled(
+              onPressed: () async {
+                try {
+                  if (controller.value.isPlaying) {
+                    await controller.pause();
+                  } else {
+                    await controller.play();
+                  }
+                } catch (error) {
+                  if (mounted) setState(() => _error = error);
+                }
+              },
+              icon: Icon(
+                controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }

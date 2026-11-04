@@ -14,7 +14,7 @@ class StorageService {
     required String extension,
     required String mediaType,
   }) async {
-    if (!const {'image', 'video', 'audio'}.contains(mediaType)) {
+    if (!const {'image', 'video', 'audio', 'document'}.contains(mediaType)) {
       throw ArgumentError.value(mediaType, 'mediaType');
     }
     final safeExtension = extension.toLowerCase();
@@ -25,9 +25,11 @@ class StorageService {
     final isAudio =
         const {'m4a', 'aac', 'mp3', 'wav'}.contains(safeExtension) ||
             (safeExtension == 'webm' && mediaType == 'audio');
+    final isDocument = safeExtension == 'pdf' && mediaType == 'document';
     if ((mediaType == 'image' && !isImage) ||
         (mediaType == 'video' && !isVideo) ||
-        (mediaType == 'audio' && !isAudio)) {
+        (mediaType == 'audio' && !isAudio) ||
+        (mediaType == 'document' && !isDocument)) {
       throw ArgumentError(
         'The .$safeExtension file does not match media type "$mediaType".',
       );
@@ -43,6 +45,7 @@ class StorageService {
       'aac' => 'audio/aac',
       'mp3' => 'audio/mpeg',
       'wav' => 'audio/wav',
+      'pdf' => 'application/pdf',
       _ =>
         throw ArgumentError.value(extension, 'extension', 'Unsupported media'),
     };

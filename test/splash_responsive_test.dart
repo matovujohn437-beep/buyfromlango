@@ -34,7 +34,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final background = tester.widget<Image>(find.byType(Image).first);
-      expect(background.fit, BoxFit.cover);
+      expect(background.fit, BoxFit.contain);
       expect(tester.getSize(find.byType(Image).first), size);
       expect(tester.getTopLeft(find.byType(Image).first), Offset.zero);
 
@@ -54,8 +54,9 @@ void main() {
           matching: find.byType(Image),
         ),
       );
-      expect(logoImage.fit, BoxFit.cover);
+      expect(logoImage.fit, BoxFit.contain);
       final logoRect = tester.getRect(find.byType(AppLogoBadge));
+      expect(logoRect.width, closeTo(logoRect.height, 0.01));
       final startButtonRect = tester.getRect(find.text('Get Started'));
       expect(logoRect.center.dx, closeTo(size.width / 2, 0.01));
       expect(logoRect.bottom, lessThanOrEqualTo(startButtonRect.top));

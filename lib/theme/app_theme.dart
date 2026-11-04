@@ -4,16 +4,16 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   AppColors._();
 
-  static const Color primary = Color(0xFF786B36);
-  static const Color primaryLight = Color(0xFF977E51);
-  static const Color primaryDark = Color(0xFF5A4D27);
+  static const Color primary = Color(0xFF2E7D32);
+  static const Color primaryLight = Color(0xFF4CAF50);
+  static const Color primaryDark = Color(0xFF1B5E20);
   static const Color accent = Color(0xFFC17A3A);
   static const Color accentDark = Color(0xFF965A2A);
   static const Color surface = Color(0xFFFFFEFA);
   static const Color background = Color(0xFFF9F9F4);
   static const Color surfaceVariant = Color(0xFFF2EEE4);
   static const Color error = Color(0xFFC62828);
-  static const Color success = Color(0xFF66733E);
+  static const Color success = Color(0xFF388E3C);
   static const Color terracotta = Color(0xFFB35C44);
   static const Color warning = Color(0xFFF57C00);
   static const Color textPrimary = Color(0xFF1B1B1B);
@@ -79,7 +79,7 @@ class AppTheme {
       colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
         onPrimary: Colors.white,
-        primaryContainer: Color(0xFFEEE9DC),
+        primaryContainer: Color(0xFFE8F5E9),
         onPrimaryContainer: AppColors.primaryDark,
         secondary: AppColors.accent,
         onSecondary: AppColors.textPrimary,
@@ -87,7 +87,7 @@ class AppTheme {
         onSecondaryContainer: Color(0xFF503B25),
         tertiary: AppColors.primaryLight,
         onTertiary: Colors.white,
-        tertiaryContainer: Color(0xFFECE7D8),
+        tertiaryContainer: Color(0xFFE8F5E9),
         onTertiaryContainer: AppColors.primaryDark,
         surface: AppColors.surface,
         surfaceContainerHighest: AppColors.surfaceVariant,

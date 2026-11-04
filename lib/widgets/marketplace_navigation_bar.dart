@@ -165,41 +165,19 @@ class _NavigationDestination extends StatelessWidget {
               horizontal: AppSpacing.xs,
               vertical: AppSpacing.sm,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 40,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? Colors.white.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 21),
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 48,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      style: Theme.of(context)
-                              .navigationBarTheme
-                              .labelTextStyle
-                              ?.resolve({}) ??
-                          const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                ),
-              ],
+                child: Icon(icon, color: Colors.white, size: 24),
+              ),
             ),
           ),
         ),

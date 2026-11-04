@@ -150,6 +150,11 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               title: const Text('Choose audio file'),
               onTap: () => Navigator.pop(context, 'audio_file'),
             ),
+            ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('Choose PDF document'),
+              onTap: () => Navigator.pop(context, 'document'),
+            ),
           ],
         ),
       ),
@@ -213,6 +218,25 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               XFile.fromData(bytes, name: selected.name),
               'audio',
               Icons.audio_file_outlined,
+            );
+          }
+          break;
+        case 'document':
+          final result = await FilePicker.pickFiles(
+            type: FileType.custom,
+            allowedExtensions: const ['pdf'],
+            withData: true,
+          );
+          final selected = result?.files.firstOrNull;
+          if (selected != null) {
+            final bytes = selected.bytes;
+            if (bytes == null || bytes.isEmpty) {
+              throw StateError('The selected document could not be read.');
+            }
+            await _addPendingMedia(
+              XFile.fromData(bytes, name: selected.name),
+              'document',
+              Icons.description_outlined,
             );
           }
           break;
@@ -510,9 +534,8 @@ class _CreateListingScreenState extends ConsumerState<CreateListingScreen> {
               const SizedBox(height: AppSpacing.md),
               _formSection(
                 context,
-                title: 'Photos, video and audio',
-                subtitle:
-                    'Add up to six media items. Short clips and voice notes help buyers.',
+                title: 'Photos, video, audio and documents',
+                subtitle: 'Add up to six media items, including PDF documents.',
                 icon: Icons.perm_media_outlined,
               ),
               const SizedBox(height: AppSpacing.sm),
