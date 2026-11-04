@@ -19,6 +19,20 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// 🛠️ ADDED FIX FOR DISCONTINUED PACKAGES (like telephony)
+subprojects {
+    afterEvaluate {
+        if (project.hasProperty("android")) {
+            val androidExtension = project.extensions.findByName("android")
+            if (androidExtension is com.android.build.gradle.BaseExtension) {
+                if (androidExtension.namespace == null) {
+                    androidExtension.namespace = "com.example.${project.name}"
+                }
+            }
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
