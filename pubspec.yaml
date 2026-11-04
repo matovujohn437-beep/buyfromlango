@@ -30,7 +30,7 @@ dependencies:
   url_launcher: ^6.3.2
   file_picker: ^11.0.3
   flutter_background_service: ^5.1.0
-  telephony: ^0.2.0
+  #telephony: ^0.2.0
   flutter_secure_storage: ^10.3.4
   timeago: ^3.7.1
   connectivity_plus: ^7.3.1
