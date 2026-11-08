@@ -57,7 +57,6 @@ class AppTheme {
         isLight ? AppColors.textSecondary : AppColors.darkTextSecondary;
     final divider = isLight ? AppColors.divider : AppColors.darkDivider;
     const primary = AppColors.primary;
-    const primaryDark = AppColors.primaryDark;
     final accent = isLight ? AppColors.accentDark : AppColors.accent;
     final colorScheme = ColorScheme(
       brightness: brightness,
@@ -125,7 +124,7 @@ class AppTheme {
       colorScheme: colorScheme,
       primaryColor: primary,
       scaffoldBackgroundColor: background,
-      progressIndicatorTheme: ProgressIndicatorThemeData(
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: primary,
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -148,7 +147,7 @@ class AppTheme {
           ),
         ),
       ),
-      iconTheme: IconThemeData(color: primary),
+      iconTheme: const IconThemeData(color: primary),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           foregroundColor: Colors.white,
@@ -214,7 +213,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.button),
           ),
-          side: BorderSide(color: primary),
+          side: const BorderSide(color: primary),
           textStyle: resolvedTextTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w600,
           ),
@@ -233,7 +232,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.button),
-          borderSide: BorderSide(color: primary, width: 1.5),
+          borderSide: const BorderSide(color: primary, width: 1.5),
         ),
         hintStyle: resolvedTextTheme.bodyMedium?.copyWith(
           color: textSecondary,
@@ -275,7 +274,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.button),
         ),
       ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: primary,
         foregroundColor: Colors.white,
       ),

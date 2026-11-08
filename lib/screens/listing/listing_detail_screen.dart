@@ -6,7 +6,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
-import '../../constants/app_assets.dart';
 import '../../models/listing.dart';
 import '../../models/listing_detail_route_data.dart';
 import '../../models/profile.dart';
@@ -20,6 +19,7 @@ import '../../widgets/common/asset_image.dart';
 import '../../widgets/common/common_widgets.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/marketplace_navigation_bar.dart';
+import '../../widgets/product_avatar.dart';
 import '../../widgets/responsive_layout.dart';
 import '../../widgets/listing_status_badge.dart';
 import '../../widgets/listing_time_ago.dart';
