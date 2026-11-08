@@ -71,7 +71,28 @@ class ChatService {
     return list
         .map(
             (item) => ChatThreadModel.fromJson(Map<String, dynamic>.from(item)))
+        .where((thread) => _isVisibleToUser(thread, userId))
         .toList();
+  }
+
+  Future<void> deleteChatForCurrentUser(int threadId) async {
+    await _client.rpc(
+      'delete_chat_for_current_user',
+      params: {'p_thread_id': threadId},
+    );
+  }
+
+  Future<void> setChatArchivedForCurrentUser({
+    required int threadId,
+    required bool archived,
+  }) async {
+    await _client.rpc(
+      'set_chat_archived_for_current_user',
+      params: {
+        'p_thread_id': threadId,
+        'p_archived': archived,
+      },
+    );
   }
 
   Future<ChatThreadModel> getThread(int threadId) async {
@@ -101,16 +122,20 @@ class ChatService {
   Stream<List<ChatThreadModel>> watchThreadsForUser(String userId) {
     return _client.from('chat_threads').stream(primaryKey: ['id']).map(
       (rows) => rows
-          .where(
-            (row) => row['buyer_id'] == userId || row['seller_id'] == userId,
-          )
           .map((row) => ChatThreadModel.fromJson(row))
+          .where((thread) => _isVisibleToUser(thread, userId))
           .toList()
         ..sort(
           (a, b) => (b.lastMessageAt ?? b.createdAt ?? DateTime(0))
               .compareTo(a.lastMessageAt ?? a.createdAt ?? DateTime(0)),
         ),
     );
+  }
+
+  bool _isVisibleToUser(ChatThreadModel thread, String userId) {
+    if (thread.buyerId == userId) return thread.buyerDeletedAt == null;
+    if (thread.sellerId == userId) return thread.sellerDeletedAt == null;
+    return false;
   }
 
   Stream<List<MessageModel>> watchMessages(int threadId) {

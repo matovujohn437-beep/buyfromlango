@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/product_catalog.dart';
 import '../theme.dart';
+import 'common/asset_image.dart';
 
 class ProductAvatar extends StatelessWidget {
   const ProductAvatar({
@@ -23,7 +25,7 @@ class ProductAvatar extends StatelessWidget {
   final String? assetName;
   final double size;
 
-  IconData get _icon {
+  IconData get _fallbackIcon {
     switch (itemName?.trim().toLowerCase()) {
       case 'egg':
       case 'eggs':
@@ -42,13 +44,16 @@ class ProductAvatar extends StatelessWidget {
         return Icons.construction;
     }
 
-    return switch (categoryId) {
+    return switch (productCategoryId(
+      categoryId: categoryId,
+      itemName: itemName,
+    )) {
       'crops' || 'produce' => Icons.agriculture,
       'livestock' => Icons.pets,
       'services' => Icons.miscellaneous_services,
       'jobs' => Icons.work_outline,
       'supplies' => Icons.inventory_2_outlined,
-      'equipment' => Icons.construction_outlined,
+      'equipment' || 'machinery' => Icons.construction_outlined,
       'cooperatives' => Icons.groups_outlined,
       _ => Icons.shopping_basket_outlined,
     };
@@ -64,23 +69,23 @@ class ProductAvatar extends StatelessWidget {
         ? Image.memory(
             imageBytes!,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _fallbackIcon(),
+            errorBuilder: (_, __, ___) => _fallbackIconWidget(),
           )
         : assetName != null
-            ? Image.asset(
-                assetName!,
+            ? AssetImageFallback(
+                asset: assetName!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallbackIcon(),
               )
             : parsedUrl != null &&
                     parsedUrl.scheme == 'https' &&
                     parsedUrl.host.isNotEmpty
-                ? Image.network(
-                    parsedUrl.toString(),
+                ? CachedNetworkImage(
+                    imageUrl: parsedUrl.toString(),
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _fallbackIcon(),
+                    placeholder: (_, __) => _fallbackIconWidget(),
+                    errorWidget: (_, __, ___) => _fallbackIconWidget(),
                   )
-                : _fallbackIcon();
+                : _fallbackIconWidget();
 
     return CircleAvatar(
       radius: size / 2,
@@ -94,10 +99,15 @@ class ProductAvatar extends StatelessWidget {
     );
   }
 
-  Widget _fallbackIcon() => Icon(
-        _icon,
-        color: AppColors.primary,
-        size: size * 0.52,
+  Widget _fallbackIconWidget() => ColoredBox(
+        color: AppColors.surfaceVariant,
+        child: Center(
+          child: Icon(
+            _fallbackIcon,
+            color: AppColors.primary,
+            size: size * 0.52,
+          ),
+        ),
       );
 }
 

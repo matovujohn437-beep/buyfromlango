@@ -16,6 +16,8 @@ class App extends ConsumerWidget {
       title: 'Buy From Lango',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
       routerConfig: AppRouter.router,
       builder: (context, child) => _ConnectivityAwareApp(
         child: child ?? const SizedBox.shrink(),

@@ -30,9 +30,9 @@ class MarketplaceNavigationBar extends ConsumerWidget {
       top: false,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: AppColors.primary,
           border: Border(
-            top: BorderSide(color: AppColors.primary.withValues(alpha: 0.12)),
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
           ),
         ),
         child: Column(
@@ -69,7 +69,7 @@ class MarketplaceNavigationBar extends ConsumerWidget {
             SizedBox(
               height: 84,
               child: ColoredBox(
-                color: AppColors.primaryDark,
+                color: AppColors.primary,
                 child: Row(
                   children: [
                     _NavigationDestination(
@@ -163,21 +163,44 @@ class _NavigationDestination extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.xs,
-              vertical: AppSpacing.sm,
+              vertical: AppSpacing.xs,
             ),
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 48,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.18)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.chip),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 44,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.accent
+                        : Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppRadius.chip),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: selected ? AppColors.primary : Colors.white,
+                    size: 22,
+                  ),
                 ),
-                child: Icon(icon, color: Colors.white, size: 24),
-              ),
+                const SizedBox(height: 2),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                selected ? AppColors.accent : Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -202,9 +225,7 @@ class _CategoryShortcut extends StatelessWidget {
     final foreground = isActive ? Colors.white : AppColors.primaryDark;
     return Center(
       child: Material(
-        color: isActive
-            ? AppColors.primary
-            : AppColors.primary.withValues(alpha: 0.07),
+        color: isActive ? AppColors.accent : Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.chip),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.chip),

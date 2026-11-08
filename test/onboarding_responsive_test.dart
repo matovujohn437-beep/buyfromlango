@@ -30,48 +30,65 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      for (var page = 0; page < 3; page++) {
+      final glassPanel = tester.widget<Container>(
+        find.byKey(const ValueKey('onboarding-glass-panel')),
+      );
+      expect(
+        (glassPanel.decoration! as BoxDecoration).color,
+        const Color(0xE62E5C31),
+      );
+
+      for (var page = 0; page < 8; page++) {
         final image = tester.widget<Image>(find.byType(Image).first);
         final imageSize = tester.getSize(find.byType(Image).first);
         final imageRect = tester.getRect(find.byType(Image).first);
 
-        expect(image.fit, BoxFit.contain);
-        expect(imageSize.height, lessThan(size.height));
-        expect(imageSize.width, lessThanOrEqualTo(size.width));
+        expect(image.fit, BoxFit.cover);
+        expect(imageSize.height, size.height);
+        expect(imageSize.width, size.width);
         expect(imageRect.left, greaterThanOrEqualTo(0));
         expect(imageRect.right, lessThanOrEqualTo(size.width));
-        expect(imageRect.bottom, lessThan(size.height));
-        expect(
-          tester.getRect(find.text('Log in')).bottom,
-          lessThanOrEqualTo(size.height),
-        );
-        final action = page == 2 ? 'Get Started' : 'Next';
+        final skipButton = find.text('Skip').hitTestable();
+        expect(skipButton, page == 7 ? findsNothing : findsOneWidget);
+        if (page < 7) {
+          expect(
+            tester.getRect(skipButton).bottom,
+            lessThanOrEqualTo(size.height),
+          );
+        }
+        final action = page == 7 ? 'Get Started' : 'Next';
         final actionRect = tester.getRect(find.text(action));
         expect(actionRect.top, greaterThanOrEqualTo(0));
         expect(actionRect.bottom, lessThanOrEqualTo(size.height));
 
         final title = [
           'Welcome to Buy From Lango',
-          'Easy, secure and local',
-          'Grow together',
+          'Sell Your Harvest',
+          'Buy Fresh & Local',
+          'Works on Any Phone',
+          'Know the Real Prices',
+          'Reveal Contacts Safely',
+          'Services & Jobs',
+          'Ready to Grow?',
         ][page];
         final description = [
-          'Your marketplace for agricultural produce, services, jobs and more.',
-          'Use SMS, mobile app or phone. Find what you need and connect with confidence.',
-          'Reach local buyers, discover opportunities and grow your business.',
+          'Connect directly with local farmers.',
+          'No brokers, no middlemen. Keep 100% of your profits.',
+          'Browse listings from verified farmers in your district.',
+          "Smartphone or feature phone? We've got you covered with our SMS gateway.",
+          'Check daily market, farm gate, and retail prices before you trade.',
+          "Request a seller's number securely via SMS.",
+          'Find tractor operators, herders, and farm labor instantly.',
+          'Join thousands of farmers transforming agriculture in Northern Uganda.',
         ][page];
         for (final text in [title, description]) {
           final rect = tester.getRect(find.text(text));
           expect(rect.top, greaterThanOrEqualTo(0));
           expect(rect.bottom, lessThanOrEqualTo(size.height));
         }
-        expect(
-          imageRect.bottom,
-          lessThanOrEqualTo(tester.getTopLeft(find.text(title)).dy),
-        );
         expect(tester.takeException(), isNull);
 
-        if (page < 2) {
+        if (page < 7) {
           await tester.tap(find.text('Next'));
           await tester.pumpAndSettle();
         }

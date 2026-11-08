@@ -79,7 +79,8 @@ void main() {
     );
   });
 
-  testWidgets('product avatar falls back to the category icon', (tester) async {
+  testWidgets('product avatar uses the matching category icon fallback',
+      (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: ProductAvatar(categoryId: 'jobs'),
@@ -89,7 +90,7 @@ void main() {
     expect(find.byIcon(Icons.work_outline), findsOneWidget);
   });
 
-  testWidgets('broken product image falls back to the category icon',
+  testWidgets('broken product image uses the matching category icon fallback',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

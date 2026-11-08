@@ -1,8 +1,23 @@
+import 'package:buy_from_lango/models/chat_thread.dart';
 import 'package:buy_from_lango/models/message.dart';
 import 'package:buy_from_lango/models/profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('chat thread parses participant-specific archive and delete state', () {
+    final thread = ChatThreadModel.fromJson({
+      'id': 12,
+      'buyer_id': 'buyer',
+      'seller_id': 'seller',
+      'buyer_archived_at': '2026-10-14T12:00:00Z',
+      'seller_deleted_at': '2026-10-15T12:00:00Z',
+    });
+
+    expect(thread.isArchivedFor('buyer'), isTrue);
+    expect(thread.isArchivedFor('seller'), isFalse);
+    expect(thread.sellerDeletedAt, DateTime.utc(2026, 10, 15, 12));
+  });
+
   test('message SMS delivery marker is parsed and serialized', () {
     final message = MessageModel.fromJson({
       'id': 12,

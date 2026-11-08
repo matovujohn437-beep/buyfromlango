@@ -228,6 +228,20 @@ void main() {
     expect(price.wholesalePriceUgx, 1800);
     expect(price.retailPriceUgx, 2200);
     expect(price.priceChangePercent, -3.5);
+    expect(price.trend, MarketPriceTrend.falling);
+  });
+
+  test('MarketPriceModel classifies rising and stable prices', () {
+    MarketPriceModel buildPrice(num changePercent) => MarketPriceModel(
+          id: 8,
+          districtId: 2,
+          itemName: 'White maize',
+          districtName: 'Lira',
+          priceChangePercent: changePercent,
+        );
+
+    expect(buildPrice(2.5).trend, MarketPriceTrend.rising);
+    expect(buildPrice(0).trend, MarketPriceTrend.stable);
   });
 
   test('MarketPriceModel keeps unavailable prices null', () {

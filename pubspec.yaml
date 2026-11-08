@@ -40,6 +40,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
 
 dependency_overrides:
   record: 5.1.0
@@ -58,6 +59,14 @@ flutter:
     - assets/illustrations/
     - assets/lottie/
     - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/illustrations/app_logo.png
+  adaptive_icon_background: '#FFFFFF'
+  adaptive_icon_foreground: assets/illustrations/app_logo.png
+  adaptive_icon_foreground_inset: 0
 
   # fonts:
   #   - family: Poppins

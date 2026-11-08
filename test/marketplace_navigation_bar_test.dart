@@ -1,12 +1,11 @@
 import 'package:buy_from_lango/providers/category_provider.dart';
-import 'package:buy_from_lango/theme.dart';
 import 'package:buy_from_lango/widgets/marketplace_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('bottom navigation shows icons only with accessible labels',
+  testWidgets('bottom navigation uses the brand color and responsive labels',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -27,9 +26,12 @@ void main() {
         matching: find.byType(ColoredBox),
       ),
     );
-    expect(navigationBackground.color, AppColors.primaryDark);
+    expect(
+      navigationBackground.color,
+      const Color(0xFF1B4332),
+    );
     for (final label in ['Back', 'Home', 'Profile', 'Buyer Demands']) {
-      expect(find.text(label), findsNothing);
+      expect(find.text(label), findsOneWidget);
       expect(find.bySemanticsLabel(label), findsOneWidget);
     }
     expect(find.byType(Icon), findsNWidgets(4));

@@ -9,6 +9,10 @@ class ChatThreadModel {
     required this.sellerId,
     this.lastMessageAt,
     this.createdAt,
+    this.buyerDeletedAt,
+    this.sellerDeletedAt,
+    this.buyerArchivedAt,
+    this.sellerArchivedAt,
   });
 
   final int id;
@@ -18,6 +22,14 @@ class ChatThreadModel {
   final String sellerId;
   final DateTime? lastMessageAt;
   final DateTime? createdAt;
+  final DateTime? buyerDeletedAt;
+  final DateTime? sellerDeletedAt;
+  final DateTime? buyerArchivedAt;
+  final DateTime? sellerArchivedAt;
+
+  bool isArchivedFor(String userId) => buyerId == userId
+      ? buyerArchivedAt != null
+      : sellerId == userId && sellerArchivedAt != null;
 
   factory ChatThreadModel.fromJson(Map<String, dynamic> json) {
     return ChatThreadModel(
@@ -28,6 +40,10 @@ class ChatThreadModel {
       sellerId: JsonReader.string(json, 'seller_id'),
       lastMessageAt: JsonReader.dateTime(json, 'last_message_at'),
       createdAt: JsonReader.dateTime(json, 'created_at'),
+      buyerDeletedAt: JsonReader.dateTime(json, 'buyer_deleted_at'),
+      sellerDeletedAt: JsonReader.dateTime(json, 'seller_deleted_at'),
+      buyerArchivedAt: JsonReader.dateTime(json, 'buyer_archived_at'),
+      sellerArchivedAt: JsonReader.dateTime(json, 'seller_archived_at'),
     );
   }
 
@@ -40,6 +56,10 @@ class ChatThreadModel {
       'seller_id': sellerId,
       'last_message_at': lastMessageAt?.toIso8601String(),
       'created_at': createdAt?.toIso8601String(),
+      'buyer_deleted_at': buyerDeletedAt?.toIso8601String(),
+      'seller_deleted_at': sellerDeletedAt?.toIso8601String(),
+      'buyer_archived_at': buyerArchivedAt?.toIso8601String(),
+      'seller_archived_at': sellerArchivedAt?.toIso8601String(),
     };
   }
 }

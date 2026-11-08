@@ -1,5 +1,7 @@
 import 'json_helpers.dart';
 
+enum MarketPriceTrend { rising, falling, stable }
+
 class MarketPriceModel {
   const MarketPriceModel({
     required this.id,
@@ -24,6 +26,12 @@ class MarketPriceModel {
   final num? retailPriceUgx;
   final num priceChangePercent;
   final DateTime? updatedAt;
+
+  MarketPriceTrend get trend {
+    if (priceChangePercent > 0) return MarketPriceTrend.rising;
+    if (priceChangePercent < 0) return MarketPriceTrend.falling;
+    return MarketPriceTrend.stable;
+  }
 
   factory MarketPriceModel.fromJson(Map<String, dynamic> json) {
     return MarketPriceModel(

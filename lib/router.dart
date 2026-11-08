@@ -22,6 +22,7 @@ import 'screens/listing/listing_detail_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/order/orders_screen.dart';
 import 'screens/price_board/price_board_screen.dart';
+import 'screens/preload_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/profile/public_profile_screen.dart';
 import 'screens/profile/seller_catalog_screen.dart';
@@ -40,7 +41,11 @@ class AppRouter {
       final isSignedIn = SupabaseConfig.client.auth.currentSession != null;
       final location = state.matchedLocation;
 
-      if (isSignedIn && location != '/profile-setup') {
+      if (isSignedIn &&
+          location != '/' &&
+          location != '/splash' &&
+          location != '/onboarding' &&
+          location != '/profile-setup') {
         final userId = SupabaseConfig.client.auth.currentUser!.id;
         final profile = await SupabaseConfig.client
             .from('profiles')
@@ -58,9 +63,7 @@ class AppRouter {
       if (isSignedIn &&
           (location == '/sign-in' ||
               location == '/sign-up' ||
-              location == '/auth' ||
-              location == '/' ||
-              location == '/onboarding')) {
+              location == '/auth')) {
         return '/home';
       }
 
@@ -84,6 +87,10 @@ class AppRouter {
     routes: [
       GoRoute(
         path: '/',
+        builder: (context, state) => const PreloadScreen(),
+      ),
+      GoRoute(
+        path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(

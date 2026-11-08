@@ -83,6 +83,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             : thread.buyerId;
     final otherUserIsFeaturePhone =
         ref.watch(chatParticipantFeaturePhoneProvider(widget.threadId));
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final emojiPickerHeight =
+        (MediaQuery.sizeOf(context).height * 0.36).clamp(120.0, 260.0);
 
     return Scaffold(
       appBar: CustomAppBar(
@@ -102,7 +105,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
         ],
       ),
-      bottomNavigationBar: const MarketplaceNavigationBar(selectedIndex: 1),
+      bottomNavigationBar: keyboardVisible || _showEmojiPicker
+          ? null
+          : const MarketplaceNavigationBar(
+              selectedIndex: 1,
+              showCategoryShortcuts: false,
+            ),
       body: ResponsiveContent(
         maxWidth: 1000,
         padding: EdgeInsets.zero,
@@ -270,12 +278,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 children: [
                   if (_showEmojiPicker)
                     SizedBox(
-                      height: 260,
+                      height: emojiPickerHeight,
                       child: EmojiPicker(
                         textEditingController: _messageController,
-                        config: const Config(
-                          height: 260,
-                          emojiViewConfig: EmojiViewConfig(columns: 8),
+                        config: Config(
+                          height: emojiPickerHeight,
+                          emojiViewConfig: const EmojiViewConfig(columns: 8),
                         ),
                       ),
                     ),

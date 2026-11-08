@@ -6,6 +6,7 @@ import '../../models/listing.dart';
 import '../../models/listing_detail_route_data.dart';
 import '../../providers/listing_provider.dart';
 import '../../theme.dart';
+import '../product_avatar.dart';
 import '../listing_time_ago.dart';
 
 class JobServiceCard extends ConsumerWidget {
@@ -19,6 +20,8 @@ class JobServiceCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final seller = ref.watch(listingSellerProvider(listing.userId));
+    final media = ref.watch(listingMediaProvider(listing.id)).valueOrNull;
+    final imageUrl = primaryListingImageUrl(listing, media);
     final isJob = listing.categoryId == 'jobs';
     final accent = isJob ? AppColors.primaryDark : AppColors.accent;
     final workerCount = listing.workersNeeded;
@@ -29,7 +32,7 @@ class JobServiceCard extends ConsumerWidget {
         onTap: () => context.push(
           '/listing/${listing.id}',
           extra: ListingDetailRouteData(
-            primaryImageUrl: listing.imageUrl,
+            primaryImageUrl: imageUrl,
             heroTag: listingHeroTag(listing.id),
           ),
         ),
@@ -41,14 +44,21 @@ class JobServiceCard extends ConsumerWidget {
               Container(
                 width: 52,
                 height: 52,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(
-                  isJob ? Icons.groups_2_outlined : Icons.handyman_outlined,
-                  color: accent,
-                  size: 28,
+                child: Hero(
+                  tag: listingHeroTag(listing.id),
+                  child: ProductAvatar(
+                    categoryId: listing.categoryId,
+                    itemName: listing.title,
+                    imageUrl: imageUrl,
+                    assetName: imageUrl?.startsWith('assets/') == true
+                        ? imageUrl
+                        : null,
+                    size: 52,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),

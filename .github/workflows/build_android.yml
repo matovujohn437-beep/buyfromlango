@@ -59,12 +59,15 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
+        working-directory: ./
 
       - name: Build release APK
         run: flutter build apk --release
+        working-directory: ./
 
       - name: Build release App Bundle
         run: flutter build appbundle --release
+        working-directory: ./
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

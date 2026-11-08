@@ -102,7 +102,10 @@ class _ListingContent extends ConsumerWidget {
         : ref.watch(listingSellerProvider(listing.userId));
     final user = ref.watch(currentUserProvider);
     final categories = ref.watch(categoriesProvider);
-    final primaryImageUrl = routeData?.primaryImageUrl ?? listing.imageUrl;
+    final routeImageUrl = routeData?.primaryImageUrl?.trim();
+    final primaryImageUrl = routeImageUrl?.isNotEmpty == true
+        ? routeImageUrl
+        : primaryListingImageUrl(listing, media.valueOrNull);
     final heroTag = routeData?.heroTag ?? listingHeroTag(listing.id);
 
     return Column(
@@ -123,18 +126,21 @@ class _ListingContent extends ConsumerWidget {
                       loading: () => _primaryImage(
                         primaryImageUrl,
                         listing.categoryId,
+                        listing.title,
                         heroTag,
                       ),
                       error: (error, _) => primaryImageUrl != null
                           ? _primaryImage(
                               primaryImageUrl,
                               listing.categoryId,
+                              listing.title,
                               heroTag,
                             )
                           : listing.isCachedOffline
                               ? _primaryImage(
                                   null,
                                   listing.categoryId,
+                                  listing.title,
                                   heroTag,
                                 )
                               : _MediaError(error: error),
@@ -142,37 +148,54 @@ class _ListingContent extends ConsumerWidget {
                         final primaryIndex = mediaItems.indexWhere(
                           (item) =>
                               item.mediaType == 'image' &&
-                              item.mediaUrl == primaryImageUrl,
+                              item.mediaUrl.trim() == primaryImageUrl,
                         );
                         if (mediaItems.isEmpty) {
                           return _primaryImage(
                             primaryImageUrl,
                             listing.categoryId,
+                            listing.title,
                             heroTag,
                           );
                         }
                         final firstImageIndex = mediaItems.indexWhere(
                           (item) => item.mediaType == 'image',
                         );
-                        final initialIndex = primaryIndex >= 0
-                            ? primaryIndex
-                            : firstImageIndex >= 0
-                                ? firstImageIndex
-                                : 0;
+                        if (firstImageIndex < 0 && primaryImageUrl == null) {
+                          return PageView.builder(
+                            itemCount: mediaItems.length + 1,
+                            itemBuilder: (context, index) => index == 0
+                                ? _primaryImage(
+                                    null,
+                                    listing.categoryId,
+                                    listing.title,
+                                    heroTag,
+                                  )
+                                : _ListingMediaView(
+                                    media: mediaItems[index - 1],
+                                    categoryId: listing.categoryId,
+                                    itemName: listing.title,
+                                  ),
+                          );
+                        }
+                        final primaryMedia = mediaItems[
+                          primaryIndex >= 0 ? primaryIndex : firstImageIndex
+                        ];
                         final orderedMedia = [
-                          mediaItems[initialIndex],
+                          primaryMedia,
                           ...mediaItems.where(
                             (item) =>
-                                !identical(item, mediaItems[initialIndex]),
+                                item.mediaType != primaryMedia.mediaType ||
+                                item.mediaUrl.trim() !=
+                                    primaryMedia.mediaUrl.trim(),
                           ),
                         ];
                         return PageView.builder(
                           itemCount: orderedMedia.length,
                           itemBuilder: (context, index) => _ListingMediaView(
                             media: orderedMedia[index],
-                            fallbackAsset: AppAssets.listingImageForCategory(
-                              listing.categoryId,
-                            ),
+                            categoryId: listing.categoryId,
+                            itemName: listing.title,
                             heroTag: index == 0 ? heroTag : null,
                           ),
                         );
@@ -825,12 +848,14 @@ class _SellerCard extends StatelessWidget {
 class _ListingMediaView extends StatefulWidget {
   const _ListingMediaView({
     required this.media,
-    required this.fallbackAsset,
+    required this.categoryId,
+    required this.itemName,
     this.heroTag,
   });
 
   final ListingMediaModel media;
-  final String fallbackAsset;
+  final String categoryId;
+  final String itemName;
   final String? heroTag;
 
   @override
@@ -1044,13 +1069,13 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
         : CachedNetworkImage(
             imageUrl: widget.media.mediaUrl,
             fit: BoxFit.cover,
-            placeholder: (_, __) => AssetImageFallback(
-              asset: widget.fallbackAsset,
-              fit: BoxFit.cover,
+            placeholder: (_, __) => _listingAvatar(
+              widget.categoryId,
+              widget.itemName,
             ),
-            errorWidget: (_, __, ___) => AssetImageFallback(
-              asset: widget.fallbackAsset,
-              fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => _listingAvatar(
+              widget.categoryId,
+              widget.itemName,
             ),
           );
     final preview = GestureDetector(
@@ -1120,10 +1145,9 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
                     : CachedNetworkImage(
                         imageUrl: widget.media.mediaUrl,
                         fit: BoxFit.contain,
-                        errorWidget: (_, __, ___) => const Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.white,
-                          size: 48,
+                        errorWidget: (_, __, ___) => _listingAvatar(
+                          widget.categoryId,
+                          widget.itemName,
                         ),
                       ),
               ),
@@ -1177,23 +1201,46 @@ class _ListingMediaViewState extends State<_ListingMediaView> {
 Widget _primaryImage(
   String? imageUrl,
   String categoryId,
+  String itemName,
   String heroTag,
 ) {
-  final fallback = AppAssets.listingImageForCategory(categoryId);
-  final Widget image = imageUrl == null || imageUrl.isEmpty
-      ? AssetImageFallback(asset: fallback, fit: BoxFit.cover)
-      : imageUrl.startsWith('assets/')
-          ? AssetImageFallback(asset: imageUrl, fit: BoxFit.cover)
-          : CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.cover,
-              placeholder: (_, __) =>
-                  AssetImageFallback(asset: fallback, fit: BoxFit.cover),
-              errorWidget: (_, __, ___) =>
-                  AssetImageFallback(asset: fallback, fit: BoxFit.cover),
-            );
+  final normalizedUrl = imageUrl?.trim();
+  if (normalizedUrl == null || normalizedUrl.isEmpty) {
+    return ColoredBox(
+      color: AppColors.surfaceVariant,
+      child: Center(
+        child: Hero(
+          tag: heroTag,
+          child: ProductAvatar(
+            categoryId: categoryId,
+            itemName: itemName,
+            size: 128,
+          ),
+        ),
+      ),
+    );
+  }
+  final Widget image = normalizedUrl.startsWith('assets/')
+      ? AssetImageFallback(asset: normalizedUrl, fit: BoxFit.cover)
+      : CachedNetworkImage(
+          imageUrl: normalizedUrl,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => _listingAvatar(categoryId, itemName),
+          errorWidget: (_, __, ___) => _listingAvatar(categoryId, itemName),
+        );
   return Hero(tag: heroTag, child: image);
 }
+
+Widget _listingAvatar(String categoryId, String itemName) => ColoredBox(
+      color: AppColors.surfaceVariant,
+      child: Center(
+        child: ProductAvatar(
+          categoryId: categoryId,
+          itemName: itemName,
+          size: 128,
+        ),
+      ),
+    );
 
 class _CompactDetail extends StatelessWidget {
   const _CompactDetail({required this.icon, required this.label});

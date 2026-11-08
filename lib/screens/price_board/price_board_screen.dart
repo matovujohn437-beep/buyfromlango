@@ -226,6 +226,7 @@ class _MarketPriceList extends StatelessWidget {
                       _MarketPriceHighlight(
                         price: price.marketPriceUgx,
                         changePercent: price.priceChangePercent,
+                        trend: price.trend,
                       ),
                     ],
                   ),
@@ -267,10 +268,12 @@ class _MarketPriceHighlight extends StatelessWidget {
   const _MarketPriceHighlight({
     required this.price,
     required this.changePercent,
+    required this.trend,
   });
 
   final num? price;
   final num changePercent;
+  final MarketPriceTrend trend;
 
   @override
   Widget build(BuildContext context) {
@@ -304,7 +307,7 @@ class _MarketPriceHighlight extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          if (price != null) _PriceChange(value: changePercent),
+          if (price != null) _PriceChange(value: changePercent, trend: trend),
         ],
       ),
     );
@@ -343,14 +346,15 @@ class _PriceColumn extends StatelessWidget {
 }
 
 class _PriceChange extends StatelessWidget {
-  const _PriceChange({required this.value});
+  const _PriceChange({required this.value, required this.trend});
 
   final num value;
+  final MarketPriceTrend trend;
 
   @override
   Widget build(BuildContext context) {
-    final isUp = value > 0;
-    final isDown = value < 0;
+    final isUp = trend == MarketPriceTrend.rising;
+    final isDown = trend == MarketPriceTrend.falling;
     final color = isUp
         ? AppColors.success
         : isDown
@@ -361,13 +365,18 @@ class _PriceChange extends StatelessWidget {
         : isDown
             ? Icons.arrow_downward
             : Icons.remove;
+    final label = switch (trend) {
+      MarketPriceTrend.rising => 'Rising',
+      MarketPriceTrend.falling => 'Falling',
+      MarketPriceTrend.stable => 'Stable',
+    };
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: AppSpacing.xs),
         Text(
-          '${value.abs().toStringAsFixed(1)}%',
+          '$label ${value.abs().toStringAsFixed(2)}%',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w600,

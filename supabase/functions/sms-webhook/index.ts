@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fitOneSms, oneLine } from "./sms_format.ts";
 
 const MAIN_MENU = `Welcome to Buy From Lango!
 Reply with a number:
@@ -9,19 +10,59 @@ Reply with a number:
 4. Register
 5. Help`;
 
+const encoder = new TextEncoder();
+
+function constantTimeEquals(left: string, right: string): boolean {
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index++) {
+    difference |= leftBytes[index] ^ rightBytes[index];
+  }
+  return difference === 0;
+}
+
 serve(async (req) => {
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-  );
-
   try {
-    const { phone, message } = await req.json();
+    const gatewayToken = Deno.env.get("SMS_WEBHOOK_TOKEN");
+    if (!gatewayToken) {
+      return Response.json({ error: "SMS gateway is not configured." }, {
+        status: 503,
+      });
+    }
+    const providedToken = req.headers.get("x-sms-gateway-token") ?? "";
+    if (!constantTimeEquals(providedToken, gatewayToken)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
-    // 1. ENFORCE INTERNATIONAL FORMAT (+256)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("SMS webhook is not configured.");
+    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const payload = await req.json();
+    const { phone, message } = payload;
+    if (
+      typeof phone !== "string" || typeof message !== "string" ||
+      !phone.trim() || !message.trim()
+    ) {
+      throw new Error("A phone number and message are required.");
+    }
+
     let formattedPhone = phone.trim();
     if (formattedPhone.startsWith("0")) {
       formattedPhone = "+256" + formattedPhone.substring(1);
+    } else if (formattedPhone.startsWith("256")) {
+      formattedPhone = "+" + formattedPhone;
+    }
+    if (!/^\+256[0-9]{9}$/.test(formattedPhone)) {
+      throw new Error("The sender phone number is not a valid Ugandan number.");
     }
 
     const text = message.trim();
@@ -34,7 +75,7 @@ serve(async (req) => {
       .select("id")
       .eq("direction", "inbound")
       .eq("phone", formattedPhone)
-      .eq("message", message)
+      .eq("message", text)
       .gte("created_at", sixtySecondsAgo)
       .limit(1)
       .maybeSingle();
@@ -48,17 +89,18 @@ serve(async (req) => {
     await supabase.from("sms_log").insert({
       direction: "inbound",
       phone: formattedPhone,
-      message,
+      message: text,
     });
 
     let reply = "";
 
     // 4. Check if User is Registered
-    const { data: userProfile } = await supabase
+    const { data: userProfile, error: profileError } = await supabase
       .from("profiles")
       .select("id, full_name, phone, is_feature_phone")
       .eq("phone", formattedPhone)
       .maybeSingle();
+    if (profileError) throw profileError;
 
     const isGuest = !userProfile;
 
@@ -75,26 +117,89 @@ serve(async (req) => {
         part.trim()
       );
 
-      if (details.length < 3) {
+      if (details.length !== 4) {
         reply =
-          "Format: REGISTER Name, District, Subcounty\nExample: REGISTER Okello James, Lira, Adyel";
+          "Format: REGISTER Name, District, Subcounty, Parish/Ward\nExample: REGISTER Okello James, Lira, Aromo, Apua";
       } else {
-        const [fullName, district, subcounty] = details;
-
-        await supabase.from("profiles").upsert({
-          phone: formattedPhone,
-          full_name: fullName,
-          role: "both",
-        }, { onConflict: "phone" });
-
-        if (session) {
-          await supabase.from("sms_sessions").delete().eq(
-            "phone",
-            formattedPhone,
+        const [fullName, district, subcounty, parish] = details;
+        if (!fullName || !district || !subcounty || !parish) {
+          reply =
+            "Format: REGISTER Name, District, Subcounty, Parish/Ward\nExample: REGISTER Okello James, Lira, Aromo, Apua";
+        } else {
+          const normalizeArea = (value: string) => value.trim().toLowerCase();
+          const { data: districtRows, error: districtError } = await supabase
+            .from("districts")
+            .select("id, name")
+            .eq("is_active", true);
+          if (districtError) throw districtError;
+          const districtRecord = districtRows?.find((row) =>
+            normalizeArea(row.name) === normalizeArea(district)
           );
+
+          const { data: subcountyRows, error: subcountyError } = districtRecord
+            ? await supabase
+              .from("subcounties")
+              .select("id, name")
+              .eq("district_id", districtRecord.id)
+              .eq("is_active", true)
+            : { data: null, error: null };
+          if (subcountyError) throw subcountyError;
+          const subcountyRecord = subcountyRows?.find((row) =>
+            normalizeArea(row.name) === normalizeArea(subcounty)
+          );
+
+          const { data: parishRows, error: parishError } = subcountyRecord
+            ? await supabase
+              .from("parishes")
+              .select("id, name")
+              .eq("subcounty_id", subcountyRecord.id)
+              .eq("is_active", true)
+            : { data: null, error: null };
+          if (parishError) throw parishError;
+          const parishRecord = parishRows?.find((row) =>
+            normalizeArea(row.name) === normalizeArea(parish)
+          );
+
+          if (!districtRecord || !subcountyRecord || !parishRecord) {
+            reply =
+              "District, subcounty, or parish/ward was not found. Enter the correct area names. Example: REGISTER Name, Lira, Aromo, Apua";
+          } else {
+            let profileId = userProfile?.id;
+            if (!profileId) {
+              const { data: createdUser, error: createUserError } =
+                await supabase.auth.admin.createUser({
+                  phone: formattedPhone,
+                  phone_confirm: true,
+                  user_metadata: { full_name: fullName, feature_phone: true },
+                });
+              if (createUserError) throw createUserError;
+              profileId = createdUser.user.id;
+            }
+
+            const { error: saveProfileError } = await supabase
+              .from("profiles")
+              .upsert({
+                id: profileId,
+                phone: formattedPhone,
+                full_name: fullName,
+                role: "both",
+                is_feature_phone: true,
+                district_id: districtRecord.id,
+                subcounty_id: subcountyRecord.id,
+                parish_id: parishRecord.id,
+              }, { onConflict: "id" });
+            if (saveProfileError) throw saveProfileError;
+
+            if (session) {
+              await supabase.from("sms_sessions").delete().eq(
+                "phone",
+                formattedPhone,
+              );
+            }
+            reply =
+              `Thank you ${fullName}. Your feature phone is registered in ${parish}, ${subcounty}, ${district}! Reply 0 for menu.`;
+          }
         }
-        reply =
-          `Thank you ${fullName}. You are registered in ${subcounty}, ${district}! Reply 0 for menu.`;
       }
     } else if (upperText.startsWith("CHAT ")) {
       const chatReply = text.match(/^CHAT\s+(\d+)\s+([\s\S]+)$/i);
@@ -235,14 +340,16 @@ serve(async (req) => {
         } else if (session.step === 3) {
           const price = parseInt(text) || 0;
 
-          await supabase.from("listings").insert({
-            user_id: userProfile.id,
-            title: currentData.item,
-            quantity: currentData.quantity,
-            price_ugx: price,
-            status: "active",
-            category_id: "crop",
-          });
+          const { error: listingError } = await supabase.from("listings")
+            .insert({
+              user_id: userProfile.id,
+              title: currentData.item,
+              quantity: currentData.quantity,
+              price_ugx: price,
+              status: "active",
+              category_id: "crops",
+            });
+          if (listingError) throw listingError;
 
           await supabase.from("sms_sessions").delete().eq(
             "phone",
@@ -278,7 +385,7 @@ serve(async (req) => {
           ).eq("status", "active").limit(3);
           reply = items && items.length > 0
             ? "Latest Items:\n" + items.map((i) =>
-              `${i.id}. ${i.title} - ${i.price_ugx} UGX`
+              `${i.id}. ${oneLine(i.title)} - ${i.price_ugx} UGX`
             ).join("\n") +
               "\n\nReply BUY [ID] to get seller's phone. Reply 0 for menu."
             : "No items available today. Reply 0 for menu.";
@@ -287,7 +394,7 @@ serve(async (req) => {
         case "3": // Sell
           if (isGuest) {
             reply =
-              "You must register to sell.\nReply: REGISTER Name, District, Subcounty";
+              "You must register to sell. Reply: REGISTER Name, District, Subcounty, Parish/Ward";
           } else {
             await supabase.from("sms_sessions").upsert({
               phone: formattedPhone,
@@ -301,7 +408,7 @@ serve(async (req) => {
 
         case "4": // Register
           reply =
-            "To register, reply with your details in this format:\nREGISTER Name, District, Subcounty\n\nExample:\nREGISTER Okello James, Lira, Adyel";
+            "To register, reply: REGISTER Name, District, Subcounty, Parish/Ward\nExample: REGISTER Okello James, Lira, Aromo, Apua";
           break;
 
         default:
@@ -309,11 +416,11 @@ serve(async (req) => {
             const listingId = upperText.replace("BUY ", "");
             if (isGuest) {
               reply =
-                "You must register to contact sellers.\nReply: REGISTER Name, District, Subcounty";
+                "You must register to contact sellers. Reply: REGISTER Name, District, Subcounty, Parish/Ward";
             } else {
               const { data: listing, error: listingError } = await supabase
                 .from("listings")
-                .select("id, user_id")
+                .select("id, user_id, title")
                 .eq("id", listingId)
                 .eq("status", "active")
                 .maybeSingle();
@@ -329,26 +436,60 @@ serve(async (req) => {
               if (sellerError) throw sellerError;
 
               if (listing && seller?.phone) {
-                const { error: orderError } = await supabase
-                  .from("orders")
-                  .insert({
-                    listing_id: listing.id,
-                    buyer_id: userProfile.id,
-                    seller_id: listing.user_id,
-                    type: "contact_request",
-                    status: "negotiating",
-                  });
-                if (orderError) throw orderError;
+                const { data: existingOrder, error: existingOrderError } =
+                  await supabase
+                    .from("orders")
+                    .select("id")
+                    .eq("listing_id", listing.id)
+                    .eq("buyer_id", userProfile.id)
+                    .eq("seller_id", listing.user_id)
+                    .eq("type", "contact_request")
+                    .eq("status", "negotiating")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (existingOrderError) throw existingOrderError;
 
-                const { error: smsError } = await supabase.from("sms_log")
-                  .insert({
-                    direction: "outbound",
-                    phone: seller.phone,
-                    message:
-                      `Buy From Lango: ${userProfile.full_name} wants to buy your item. Reply REVEAL to share your number.`,
-                    status: "queued",
-                  });
-                if (smsError) throw smsError;
+                let orderId = existingOrder?.id;
+                if (orderId === undefined) {
+                  const { data: order, error: orderError } = await supabase
+                    .from("orders")
+                    .insert({
+                      listing_id: listing.id,
+                      buyer_id: userProfile.id,
+                      seller_id: listing.user_id,
+                      type: "contact_request",
+                      status: "negotiating",
+                    })
+                    .select("id")
+                    .single();
+                  if (orderError || !order) throw orderError;
+                  orderId = order.id;
+                }
+
+                const { data: existingNotification, error: notificationError } =
+                  await supabase
+                    .from("sms_log")
+                    .select("id")
+                    .eq("related_order_id", orderId)
+                    .eq("direction", "outbound")
+                    .maybeSingle();
+                if (notificationError) throw notificationError;
+
+                if (!existingNotification) {
+                  const buyerName = userProfile.full_name?.trim() || "A buyer";
+                  const { error: smsError } = await supabase.from("sms_log")
+                    .insert({
+                      direction: "outbound",
+                      phone: seller.phone,
+                      message:
+                        `Buy From Lango: ${buyerName} has requested your contact for ${listing.title}. Reply REVEAL to share your number.`,
+                      status: "queued",
+                      related_user_id: listing.user_id,
+                      related_order_id: orderId,
+                    });
+                  if (smsError) throw smsError;
+                }
 
                 reply =
                   `Request sent to seller. They have been notified via SMS. Their number will be shared after they accept. Reply 0 for menu.`;
@@ -362,6 +503,8 @@ serve(async (req) => {
           }
       }
     }
+
+    reply = fitOneSms(reply);
 
     // 11. Log Outbound Message
     if (reply) {

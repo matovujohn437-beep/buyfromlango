@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Deploy Supabase Edge Functions to Production",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"supabase",
+				"functions",
+				"deploy",
+				"--project-ref",
+				"ospfxilvkgkamcgjluzb"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

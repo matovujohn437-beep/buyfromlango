@@ -166,3 +166,17 @@ class ListingMediaModel {
         mediaType: json['media_type']?.toString() ?? 'image',
       );
 }
+
+String? primaryListingImageUrl(
+  ListingModel listing, [
+  List<ListingMediaModel>? media,
+]) {
+  final imageUrl = listing.imageUrl?.trim();
+  if (imageUrl?.isNotEmpty == true) return imageUrl;
+
+  for (final item in media ?? const <ListingMediaModel>[]) {
+    final mediaUrl = item.mediaUrl.trim();
+    if (item.mediaType == 'image' && mediaUrl.isNotEmpty) return mediaUrl;
+  }
+  return null;
+}

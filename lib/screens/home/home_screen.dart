@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,11 +8,9 @@ import '../../models/listing.dart';
 import '../../models/listing_detail_route_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/category_provider.dart';
-import '../../providers/home_provider.dart';
 import '../../providers/listing_provider.dart';
+import '../../providers/market_price_provider.dart';
 import '../../theme.dart';
-import '../../widgets/common/asset_image.dart';
-import '../../widgets/custom_app_bar.dart';
 import '../../widgets/listing_location_filters.dart';
 import '../../widgets/listing_status_badge.dart';
 import '../../widgets/listing_time_ago.dart';
@@ -53,21 +48,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return false;
   }
 
-  void _hideHeroSection() {
-    ref.read(showHomeHeroSectionProvider.notifier).state = false;
-  }
-
-  void _syncHeroSectionWithFilters() {
-    final feed = ref.read(listingFeedProvider);
-    final hasFilters = feed.searchQuery.trim().isNotEmpty ||
-        feed.categoryId != null ||
-        feed.districtId != null ||
-        feed.subcountyId != null ||
-        feed.parishId != null;
-    final shouldShowHero = !hasFilters;
-    ref.read(showHomeHeroSectionProvider.notifier).state = shouldShowHero;
-  }
-
   void _clearFilters() {
     _searchController.clear();
     ref.read(listingFeedProvider.notifier)
@@ -78,7 +58,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         clearSubcounty: true,
         clearParish: true,
       );
-    ref.read(showHomeHeroSectionProvider.notifier).state = true;
   }
 
   void _goHome() {
@@ -89,33 +68,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final feed = ref.watch(listingFeedProvider);
-    final showHeroSection = ref.watch(showHomeHeroSectionProvider);
     final user = ref.watch(currentUserProvider);
+    final profile = ref.watch(currentProfileProvider).valueOrNull;
     final selectedCategory = feed.categoryId;
+    final metadata = user?.userMetadata;
+    final name = (profile?.fullName ??
+            metadata?['full_name']?.toString() ??
+            metadata?['name']?.toString())
+        ?.trim();
+    final greetingName = name == null || name.isEmpty ? 'there' : name;
+    final avatarUrl = profile?.avatarUrl ??
+        metadata?['avatar_url']?.toString() ??
+        metadata?['picture']?.toString();
+    final parsedAvatarUrl =
+        avatarUrl == null ? null : Uri.tryParse(avatarUrl.trim());
+    final safeAvatarUrl = parsedAvatarUrl != null &&
+            parsedAvatarUrl.scheme == 'https' &&
+            parsedAvatarUrl.host.isNotEmpty
+        ? parsedAvatarUrl.toString()
+        : null;
 
     return Scaffold(
-      appBar: CustomAppBar(
-        actions: [
-          IconButton(
-            tooltip: 'Price Board',
-            onPressed: () => context.push('/price-board'),
-            icon: const Icon(Icons.trending_up),
-          ),
-          IconButton(
-            tooltip: 'Messages',
-            onPressed: () => context.push('/chats'),
-            icon: const Icon(Icons.chat_bubble_outline),
-          ),
-          IconButton(
-            tooltip: 'Search',
-            onPressed: () {
-              _hideHeroSection();
-              FocusScope.of(context).requestFocus(_searchFocusNode);
-            },
-            icon: const Icon(Icons.search),
-          ),
-        ],
-      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final content = SafeArea(
@@ -127,24 +100,112 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
+                    SliverAppBar(
+                      floating: true,
+                      snap: true,
+                      pinned: true,
+                      toolbarHeight: 72,
+                      backgroundColor: AppColors.primary,
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 0,
+                      titleSpacing: 16,
+                      title: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 21,
+                            backgroundColor: Colors.white.withValues(alpha: 0.16),
+                            foregroundColor: Colors.white,
+                            child: safeAvatarUrl == null
+                                ? const Icon(Icons.person_outline)
+                                : ClipOval(
+                                    child: Image.network(
+                                      safeAvatarUrl,
+                                      width: 42,
+                                      height: 42,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.person_outline,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => context.go(
+                                user == null ? '/sign-in' : '/profile',
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Hello,',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: Colors.white70),
+                                  ),
+                                  Text(
+                                    greetingName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        IconButton(
+                          tooltip: 'Price Board',
+                          onPressed: () => context.push('/price-board'),
+                          icon: const Icon(Icons.trending_up),
+                        ),
+                        IconButton(
+                          tooltip: 'Messages',
+                          onPressed: () => context.push('/chats'),
+                          icon: const Icon(Icons.chat_bubble_outline),
+                        ),
+                        IconButton(
+                          tooltip: 'Notifications',
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Notifications are coming soon.',
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.notifications_none),
+                        ),
+                      ],
+                    ),
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: TextField(
                           focusNode: _searchFocusNode,
                           controller: _searchController,
-                          onTap: _hideHeroSection,
                           onChanged: (value) {
                             ref
                                 .read(listingFeedProvider.notifier)
                                 .setSearchQuery(value);
-                            _syncHeroSectionWithFilters();
                           },
                           decoration: InputDecoration(
-                            hintText: 'Search item name',
+                            hintText:
+                                'Search crops, livestock, services and more...',
                             prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchController.text.isEmpty &&
-                                    showHeroSection
+                            suffixIcon: _searchController.text.isEmpty
                                 ? null
                                 : IconButton(
                                     tooltip: 'Clear search',
@@ -154,7 +215,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ref
                                           .read(listingFeedProvider.notifier)
                                           .setSearchQuery('');
-                                      _syncHeroSectionWithFilters();
+                                      setState(() {});
                                     },
                                     icon: const Icon(Icons.close),
                                   ),
@@ -176,7 +237,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 clearSubcounty: true,
                                 clearParish: true,
                               );
-                          _syncHeroSectionWithFilters();
                         },
                         onSubcountyChanged: (id) {
                           ref
@@ -186,7 +246,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 clearSubcounty: id == null,
                                 clearParish: true,
                               );
-                          _syncHeroSectionWithFilters();
                         },
                         onParishChanged: (id) {
                           ref
@@ -195,30 +254,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 parishId: id,
                                 clearParish: id == null,
                               );
-                          _syncHeroSectionWithFilters();
                         },
                       ),
                     ),
-                    if (showHeroSection) ...[
-                      const SliverToBoxAdapter(child: _BannerSection()),
-                      SliverToBoxAdapter(
-                        child: _CategorySection(
-                          selectedCategory: selectedCategory,
-                          onCategoryTap: (categoryId) {
-                            ref
-                                .read(listingFeedProvider.notifier)
-                                .setCategory(categoryId);
-                            _syncHeroSectionWithFilters();
-                          },
-                          onAllTap: () {
-                            ref
-                                .read(listingFeedProvider.notifier)
-                                .setCategory(null);
-                            _syncHeroSectionWithFilters();
-                          },
-                        ),
-                      ),
-                    ],
                     if (selectedCategory != null ||
                         feed.districtId != null ||
                         feed.subcountyId != null ||
@@ -306,7 +344,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       bottomNavigationBar: MarketplaceNavigationBar(
         selectedIndex: 1,
-        showCategoryShortcuts: showHeroSection,
+        showCategoryShortcuts: false,
         onDestinationSelected: (index) {
           switch (index) {
             case 0:
@@ -460,219 +498,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _BannerSection extends StatefulWidget {
-  const _BannerSection();
-
-  @override
-  State<_BannerSection> createState() => _BannerSectionState();
-}
-
-class _BannerSectionState extends State<_BannerSection> {
-  static const _slides = [
-    (
-      image: AppAssets.listingCrop,
-      eyebrow: 'FRESH FROM THE FARM',
-      title: 'Bring home the harvest.',
-      subtitle: 'Find fresh produce from farmers in your community.',
-    ),
-    (
-      image: AppAssets.listingLivestock,
-      eyebrow: 'LIVESTOCK & MORE',
-      title: 'Find your next healthy stock.',
-      subtitle: 'Explore livestock listings from local sellers.',
-    ),
-    (
-      image: AppAssets.listingService,
-      eyebrow: 'FARM SERVICES',
-      title: 'Get the right help for your farm.',
-      subtitle: 'Find vets, transport, ploughing and irrigation.',
-    ),
-    (
-      image: AppAssets.listingCrop,
-      eyebrow: 'FARM SUPPLIES',
-      title: 'Everything for a productive season.',
-      subtitle: 'Browse trusted drugs, fertilizers and farm inputs.',
-    ),
-    (
-      image: AppAssets.listingService,
-      eyebrow: 'EQUIPMENT & MACHINERY',
-      title: 'Tools to get more done.',
-      subtitle: 'Find hoes, tractors, mills and farm machinery.',
-    ),
-  ];
-
-  late final PageController _pageController;
-  late final Timer _autoPlayTimer;
-  int _activeIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_pageController.hasClients) return;
-      final nextPage = (_activeIndex + 1) % _slides.length;
-      _pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 550),
-        curve: Curves.easeInOut,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _autoPlayTimer.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: SizedBox(
-              width: double.infinity,
-              height: 220,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: PageView.builder(
-                  clipBehavior: Clip.hardEdge,
-                  physics: const ClampingScrollPhysics(),
-                  controller: _pageController,
-                  itemCount: _slides.length,
-                  onPageChanged: (index) =>
-                      setState(() => _activeIndex = index),
-                  itemBuilder: (context, index) {
-                    final slide = _slides[index];
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        AssetImageFallback(
-                          asset: slide.image,
-                          fit: BoxFit.cover,
-                        ),
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Color(0x14000000),
-                                Color(0x74000000),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 16,
-                          right: 16,
-                          bottom: 15,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(
-                                sigmaX: 16,
-                                sigmaY: 16,
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  13,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.32),
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      slide.eyebrow,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            letterSpacing: 1.3,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      slide.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      slide.subtitle,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Colors.white,
-                                            height: 1.3,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var index = 0; index < _slides.length; index++)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: index == _activeIndex ? 20 : 6,
-                  height: 6,
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: BoxDecoration(
-                    color: index == _activeIndex
-                        ? AppColors.primary
-                        : AppColors.primary.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-      ),
-    );
-  }
-}
-
 class _CategorySection extends ConsumerWidget {
   const _CategorySection({
     required this.selectedCategory,
@@ -763,6 +588,104 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
+class _MarketPricePreview extends ConsumerWidget {
+  const _MarketPricePreview();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prices = ref.watch(marketPricesProvider(null));
+
+    return prices.maybeWhen(
+      data: (items) {
+        if (items.isEmpty) return const SizedBox.shrink();
+        final previewItems = items.take(3).toList();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Market prices',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => context.push('/price-board'),
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: const Text('Price board'),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 92,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: previewItems.length,
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(width: AppSpacing.sm),
+                  itemBuilder: (context, index) {
+                    final price = previewItems[index];
+                    return Container(
+                      width: 176,
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        border: Border.all(color: AppColors.divider),
+                        borderRadius: BorderRadius.circular(AppRadius.card),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            price.itemName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          Text(
+                            price.marketPriceUgx == null
+                                ? 'Price unavailable'
+                                : 'UGX ${price.marketPriceUgx!.round()} / kg',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          Text(
+                            price.districtName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
 class _ListingsHeading extends StatelessWidget {
   const _ListingsHeading({
     required this.title,
@@ -821,7 +744,7 @@ class _ListingCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final imageUrl = _primaryListingImage(
+    final imageUrl = primaryListingImageUrl(
       listing,
       ref.watch(listingMediaProvider(listing.id)).valueOrNull,
     );
@@ -855,7 +778,7 @@ class _ListingThumbnail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final imageUrl = _primaryListingImage(
+    final imageUrl = primaryListingImageUrl(
       listing,
       ref.watch(listingMediaProvider(listing.id)).valueOrNull,
     );
@@ -890,7 +813,7 @@ class _ListingListTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final imageUrl = _primaryListingImage(
+    final imageUrl = primaryListingImageUrl(
       listing,
       ref.watch(listingMediaProvider(listing.id)).valueOrNull,
     );
@@ -968,22 +891,22 @@ class _ListingText extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          Row(
-            children: [
-              ListingStatusBadge(
-                saleStatus: listing.saleStatus,
-                compact: true,
+        Row(
+          children: [
+            ListingStatusBadge(
+              saleStatus: listing.saleStatus,
+              compact: true,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: ListingTimeAgo(
+                createdAt: listing.createdAt,
+                style: Theme.of(context).textTheme.labelSmall,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: ListingTimeAgo(
-                  createdAt: listing.createdAt,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ),
-            ],
-          ),
-          PostMetadata(
+            ),
+          ],
+        ),
+        PostMetadata(
           location: listing.districtName,
           createdVia: listing.createdVia,
         ),
@@ -1021,15 +944,13 @@ class _ListingImage extends ConsumerWidget {
           if (imageUrl != null && imageUrl.isNotEmpty) {
             return _hero(
               _avatar(
-                imageUrl:
-                    imageUrl.startsWith('assets/') ? null : imageUrl,
+                imageUrl: imageUrl.startsWith('assets/') ? null : imageUrl,
                 assetName: imageUrl.startsWith('assets/') ? imageUrl : null,
               ),
             );
           }
-          final image = mediaItems
-              .where((item) => item.mediaType == 'image')
-              .firstOrNull;
+          final image =
+              mediaItems.where((item) => item.mediaType == 'image').firstOrNull;
           if (image == null) {
             return _hero(_avatar(imageUrl: listing.imageUrl));
           }
@@ -1061,18 +982,6 @@ class _ListingImage extends ConsumerWidget {
       ),
     );
   }
-}
-
-String? _primaryListingImage(
-  ListingModel listing,
-  List<ListingMediaModel>? media,
-) {
-  final imageUrl = listing.imageUrl?.trim();
-  if (imageUrl?.isNotEmpty == true) return imageUrl;
-  return media
-      ?.where((item) => item.mediaType == 'image')
-      .map((item) => item.mediaUrl)
-      .firstOrNull;
 }
 
 void _openListing(

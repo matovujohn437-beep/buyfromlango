@@ -1,119 +1,90 @@
-import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../constants/app_assets.dart';
-import '../providers/connectivity_provider.dart';
 import '../theme.dart';
-import '../widgets/responsive_layout.dart';
-import '../widgets/app_logo_badge.dart';
 
-class SplashScreen extends ConsumerWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final connectivity = ref.watch(connectivityStatusProvider);
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  Timer? _navigationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _navigationTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) context.go('/onboarding');
+    });
+  }
+
+  @override
+  void dispose() {
+    _navigationTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxHeight < 560;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned.fill(
-                child: Image.asset(
-                  AppAssets.splashBackground,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: AppColors.primaryDark,
-                  ),
-                ),
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(AppAssets.splashBackground, fit: BoxFit.cover),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Color(0x26000000),
+                  Color(0xB3000000),
+                ],
+                stops: [0, 0.45, 1],
               ),
-              Column(
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: Column(
+                key: const ValueKey('splash-branding'),
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, logoConstraints) {
-                        final diameter = math
-                            .min(
-                              logoConstraints.maxWidth * 0.78,
-                              logoConstraints.maxHeight * 0.72,
-                            )
-                            .clamp(0.0, 390.0)
-                            .toDouble();
-                        return Center(
-                          child: AppLogoBadge(
-                            size: diameter,
-                            plain: true,
-                            circular: true,
-                          ),
-                        );
-                      },
-                    ),
+                  const Icon(
+                    Icons.agriculture_outlined,
+                    color: Colors.white,
+                    size: 76,
                   ),
-                  SafeArea(
-                    top: false,
-                    child: ResponsiveContent(
-                      maxWidth: 480,
-                      padding: EdgeInsets.zero,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(AppSpacing.lg),
-                          ),
-                          border: Border(
-                            top: BorderSide(color: AppColors.divider),
-                          ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Buy From Lango',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
                         ),
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.xl,
-                          compact ? AppSpacing.sm : AppSpacing.lg,
-                          AppSpacing.xl,
-                          compact ? AppSpacing.xs : AppSpacing.md,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Market · Connect · Grow',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: AppColors.accent,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w600,
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (connectivity.isLoading)
-                              const Padding(
-                                padding: EdgeInsets.only(bottom: AppSpacing.xs),
-                                child: LinearProgressIndicator(),
-                              ),
-                            Text(
-                              'Empowering Rural Farmers',
-                              textAlign: TextAlign.center,
-                              style: (compact
-                                      ? Theme.of(context).textTheme.titleMedium
-                                      : Theme.of(context).textTheme.titleLarge)
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            SizedBox(
-                              height: compact ? AppSpacing.xs : AppSpacing.md,
-                            ),
-                            FilledButton(
-                              onPressed: () => context.push('/onboarding'),
-                              child: const Text('Get Started'),
-                            ),
-                            SizedBox(height: compact ? 0 : AppSpacing.xs),
-                            TextButton(
-                              onPressed: () => context.go('/home'),
-                              child: const Text('Browse marketplace'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }

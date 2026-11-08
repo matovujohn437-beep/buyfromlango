@@ -35,22 +35,20 @@ class CustomAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
     return AppBar(
       toolbarHeight: 72,
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
       automaticallyImplyLeading: false,
       title: Row(
         children: [
-          const AppLogoBadge(size: 58),
+          const AppLogoBadge(size: 48),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
           ),
         ],

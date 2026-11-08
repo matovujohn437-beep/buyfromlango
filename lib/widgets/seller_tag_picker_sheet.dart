@@ -166,31 +166,35 @@ class SellerTagPills extends StatelessWidget {
   Widget build(BuildContext context) {
     final tags = tagKeys.map(SellerTag.byKey).whereType<SellerTag>().toList();
     if (tags.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: AppSpacing.xs,
-      runSpacing: AppSpacing.xs,
-      children: [
-        for (final tag in tags)
-          Tooltip(
-            message: tag.label,
-            child: Chip(
-              visualDensity: VisualDensity.compact,
-              avatar: Icon(
-                tag.icon,
-                size: 15,
-                color: tag.foregroundColor,
-              ),
-              label: Text(tag.label),
-              backgroundColor: tag.backgroundColor,
-              side: BorderSide.none,
-              labelStyle: TextStyle(
-                color: tag.foregroundColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final tag in tags)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.xs),
+              child: Tooltip(
+                message: tag.label,
+                child: Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(
+                    tag.icon,
+                    size: 15,
+                    color: tag.foregroundColor,
+                  ),
+                  label: Text(tag.label),
+                  backgroundColor: tag.backgroundColor,
+                  side: BorderSide.none,
+                  labelStyle: TextStyle(
+                    color: tag.foregroundColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

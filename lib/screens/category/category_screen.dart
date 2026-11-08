@@ -350,11 +350,7 @@ class _CategoryListingCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOwner = currentUserId != null && currentUserId == listing.userId;
     final media = ref.watch(listingMediaProvider(listing.id)).valueOrNull;
-    final imageUrl = listing.imageUrl ??
-        media
-            ?.where((item) => item.mediaType == 'image')
-            .map((item) => item.mediaUrl)
-            .firstOrNull;
+    final imageUrl = primaryListingImageUrl(listing, media);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
